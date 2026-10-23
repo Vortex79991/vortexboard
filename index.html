@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#fbfbf9">
 <title>VortexBoard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap">
+<script>try { document.documentElement.dataset.theme = localStorage.getItem('vb.theme') || 'light'; } catch (e) {}</script>
 <!-- Telegram Mini App SDK; harmless in a normal browser (Telegram.WebApp.initData is empty there) -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -12,9 +14,37 @@
   --sb-bg:#fbfbf9; --sb-bg2:#efefeb; --sb-line:#e6e6e1; --sb-text:#2a2c31; --sb-dim:#8a8d96;
   --accent:#5b8cff; --accent-ink:#2f5fe0; --accent-soft:#e6edff;
   --panel:#ffffff; --panel-line:#e6e6ea; --ink:#1d1f24; --ink-dim:#6b6f7a; --stage:#f3f3f0;
+  --hover:#f0f1f4; --on-bg:#e6edff; --on-ink:#2f5fe0; --field:#ffffff; --soft:#f5f5f7; --grid:#d6d6d1;
+  --logo-bg:#141414; --logo-fg:#ffffff; --danger-soft:#fdeeee; --folder-soft:#fbf3e3; --export:#ffffff;
   --shadow:0 1px 2px rgba(16,18,24,.06),0 10px 30px rgba(16,18,24,.12);
   font-family:"Segoe UI",Inter,system-ui,-apple-system,sans-serif;
 }
+/* themes: everything above reads these variables; --export is the PNG background */
+:root[data-theme="dark"]{
+  --sb-bg:#1b1c20; --sb-bg2:#2a2c32; --sb-line:#2c2e34; --sb-text:#e4e5ea; --sb-dim:#8e919b;
+  --accent:#6f9bff; --accent-ink:#9dbbff; --accent-soft:#263252;
+  --panel:#23252a; --panel-line:#34363d; --ink:#eceef3; --ink-dim:#9a9ea8; --stage:#15161a;
+  --hover:#2e3036; --on-bg:#2b3a60; --on-ink:#a9c3ff; --field:#1b1c20; --soft:#2a2c32; --grid:#2f3137;
+  --logo-bg:#eceef3; --logo-fg:#15161a; --danger-soft:#3a2224; --folder-soft:#3a3122; --export:#15161a;
+  --note-soft:#2f2645; --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+:root[data-theme="green"]{
+  --sb-bg:#f3f8f1; --sb-bg2:#e3eedf; --sb-line:#dbe7d6; --sb-text:#24312a; --sb-dim:#7f8f84;
+  --accent:#2f9e5b; --accent-ink:#217a44; --accent-soft:#dcf0e2;
+  --panel:#fcfefb; --panel-line:#dbe6d6; --ink:#1d2a22; --ink-dim:#627168; --stage:#e9f2e6;
+  --hover:#e6f0e2; --on-bg:#d6eedd; --on-ink:#217a44; --field:#ffffff; --soft:#eef5eb; --grid:#c9dbc2;
+  --logo-bg:#1f4d33; --logo-fg:#ffffff; --folder-soft:#eef3df; --export:#f4f9f2;
+}
+:root[data-theme="blue"]{
+  --sb-bg:#f2f6fc; --sb-bg2:#e1e9f5; --sb-line:#d9e2ef; --sb-text:#1f2a3a; --sb-dim:#7b889b;
+  --accent:#2f7de1; --accent-ink:#1d5fb5; --accent-soft:#dce9fb;
+  --panel:#fcfdff; --panel-line:#d9e3f0; --ink:#182233; --ink-dim:#5f6c80; --stage:#e8eff8;
+  --hover:#e4ecf7; --on-bg:#d5e5fa; --on-ink:#1d5fb5; --field:#ffffff; --soft:#edf2f9; --grid:#c8d5e7;
+  --logo-bg:#17345e; --logo-fg:#ffffff; --folder-soft:#f3f0e2; --export:#f3f7fc;
+}
+.mi .swd{width:16px;height:16px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(127,127,127,.35)}
+#homeTheme{position:fixed;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:46;background:var(--panel);border:1px solid var(--panel-line);box-shadow:var(--shadow);color:var(--ink)}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--stage);color:var(--ink)}
 button{font:inherit}
@@ -26,8 +56,8 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 /* ---------- sidebar ---------- */
 #sidebar{background:var(--sb-bg);color:var(--sb-text);display:flex;flex-direction:column;min-width:0;overflow:hidden;border-right:1px solid var(--sb-line);box-shadow:1px 0 0 rgba(16,18,24,.02),4px 0 18px rgba(16,18,24,.04);position:relative;z-index:7}
 .brand{display:flex;align-items:center;gap:10px;padding:16px 16px 10px;font-weight:700;font-size:15.5px;white-space:nowrap;letter-spacing:-.01em;color:var(--ink)}
-.brand span b{font-weight:400;color:#6b6e76}
-.logo{width:26px;height:26px;border-radius:8px;background:#141414;display:grid;place-items:center;color:#fff}
+.brand span b{font-weight:400;color:var(--ink-dim)}
+.logo{width:26px;height:26px;border-radius:8px;background:var(--logo-bg);display:grid;place-items:center;color:var(--logo-fg)}
 .logo svg{width:15px;height:15px}
 .sec{display:flex;align-items:center;justify-content:space-between;padding:12px 10px 6px 16px;font-size:11px;font-weight:650;letter-spacing:.08em;color:var(--sb-dim);text-transform:uppercase;white-space:nowrap}
 .sec .btns{display:flex;gap:2px}
@@ -55,29 +85,34 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 /* note editor */
 #noteEd{position:fixed;inset:0;z-index:55;background:rgba(20,20,24,.18);display:none;place-items:center}
 #noteEd.show{display:grid}
-#noteEd .card{width:min(440px,calc(100vw - 32px));background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(16,18,24,.25);border:1px solid var(--panel-line);border-top:4px solid var(--note);padding:16px}
+#noteEd .card{width:min(440px,calc(100vw - 32px));background:var(--panel);border-radius:16px;box-shadow:0 20px 60px rgba(16,18,24,.25);border:1px solid var(--panel-line);border-top:4px solid var(--note);padding:16px}
 #noteEd .hd{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:var(--note)}
 #noteEd .hd svg{width:20px;height:20px}
-#noteEd .hd input{flex:1;border:0;outline:none;font:inherit;font-size:16px;font-weight:650;color:var(--ink);min-width:0;padding:4px 0}
-#noteEd textarea{width:100%;min-height:150px;resize:vertical;border:1px solid var(--panel-line);border-radius:10px;padding:10px 12px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);outline:none;background:#fcfcfd}
+#noteEd .hd input{flex:1;border:0;outline:none;font:inherit;font-size:16px;font-weight:650;color:var(--ink);background:transparent;min-width:0;padding:4px 0}
+#noteEd textarea{width:100%;min-height:150px;resize:vertical;border:1px solid var(--panel-line);border-radius:10px;padding:10px 12px;font:inherit;font-size:13.5px;line-height:1.5;color:var(--ink);outline:none;background:var(--field)}
 #noteEd textarea:focus{border-color:var(--note);box-shadow:0 0 0 3px rgba(139,92,246,.15)}
 #noteEd .ft{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--ink-dim)}
 #noteEd .ft .pbtn{background:var(--note)} #noteEd .ft .pbtn:hover{background:var(--note-ink)}
 
 /* hover card for objects with a note */
-#noteTip{position:absolute;z-index:8;max-width:260px;min-width:160px;background:#fff;border:1px solid var(--panel-line);border-left:3px solid var(--note);border-radius:10px;box-shadow:var(--shadow);padding:9px 12px 10px;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;font-size:12.5px;color:var(--ink)}
+#textEd{position:absolute;z-index:7;display:none;margin:0;border:1.5px dashed var(--accent);outline:none;resize:none;overflow:hidden;white-space:pre;overflow-wrap:normal;box-sizing:border-box;transform-origin:center;min-width:12px;-webkit-user-select:text;user-select:text}
+#props .tg{display:flex;gap:4px;flex-wrap:wrap}
+#props .tg .tbtn{width:34px;height:32px;background:var(--soft)}
+#props .tg .tbtn.on{background:var(--on-bg);color:var(--on-ink)}
+#props .chip.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+#noteTip{position:absolute;z-index:8;max-width:260px;min-width:160px;background:var(--panel);border:1px solid var(--panel-line);border-left:3px solid var(--note);border-radius:10px;box-shadow:var(--shadow);padding:9px 12px 10px;pointer-events:none;opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;font-size:12.5px;color:var(--ink)}
 #noteTip.show{opacity:1;transform:none}
 #noteTip .t{display:flex;align-items:center;gap:6px;font-weight:650;font-size:13px;margin-bottom:4px;color:var(--note-ink)}
 #noteTip .t svg{width:15px;height:15px}
-#noteTip .b{white-space:pre-wrap;line-height:1.45;color:#3b3e45;display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden}
+#noteTip .b{white-space:pre-wrap;line-height:1.45;color:var(--ink);display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden}
 #noteTip .b.empty{color:var(--ink-dim);font-style:italic}
 .row .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
 .row .more{opacity:0;width:24px;height:24px}
 .row:hover .more,.row.active .more{opacity:1}
-.row input{flex:1;min-width:0;background:#fff;border:1px solid var(--accent);color:var(--ink);border-radius:5px;padding:3px 6px;font:inherit;outline:none;box-shadow:0 0 0 3px rgba(91,140,255,.18)}
-.hint-empty{font-size:12px;color:#a3a6ae;height:24px;display:flex;align-items:center}
+.row input{flex:1;min-width:0;background:var(--field);border:1px solid var(--accent);color:var(--ink);border-radius:5px;padding:3px 6px;font:inherit;outline:none;box-shadow:0 0 0 3px rgba(91,140,255,.18)}
+.hint-empty{font-size:12px;color:var(--sb-dim);height:24px;display:flex;align-items:center}
 .sb-foot{padding:12px 16px 14px;border-top:1px solid var(--sb-line);font-size:12px;color:var(--sb-dim);line-height:1.7;white-space:nowrap}
-kbd{font-family:inherit;font-size:11px;background:#fff;border:1px solid #dcdcd7;border-bottom-width:2px;border-radius:4px;padding:0 5px;color:#4a4d55}
+kbd{font-family:inherit;font-size:11px;background:var(--field);border:1px solid var(--panel-line);border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--ink-dim)}
 
 /* ---------- stage ---------- */
 #stage{position:relative;overflow:hidden;min-width:0}
@@ -91,8 +126,8 @@ kbd{font-family:inherit;font-size:11px;background:#fff;border:1px solid #dcdcd7;
 
 #toolbar{top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:5px}
 .tbtn{width:36px;height:36px;border:0;background:transparent;border-radius:10px;color:var(--ink);display:grid;place-items:center;cursor:pointer;position:relative}
-.tbtn:hover{background:#f0f1f4}
-.tbtn.on{background:#e6edff;color:var(--accent-ink)}
+.tbtn:hover{background:var(--hover)}
+.tbtn.on{background:var(--on-bg);color:var(--on-ink)}
 .tbtn:disabled{opacity:.3;cursor:default;background:transparent}
 .tbtn[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:calc(100% + 9px);left:50%;transform:translateX(-50%);background:#1f2127;color:#fff;font-size:12px;padding:5px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:20}
 .sep{width:1px;height:22px;background:var(--panel-line);margin:0 4px;flex:none}
@@ -108,14 +143,14 @@ kbd{font-family:inherit;font-size:11px;background:#fff;border:1px solid #dcdcd7;
 .ctl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim);white-space:nowrap;flex:none}
 .ctl input[type=range]{width:72px}
 .ctl .val{width:30px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
-#preview{width:30px;height:30px;border-radius:8px;background:#f4f4f6;display:grid;place-items:center;flex:none;overflow:hidden}
+#preview{width:30px;height:30px;border-radius:8px;background:var(--soft);display:grid;place-items:center;flex:none;overflow:hidden}
 #preview i{display:block;border-radius:50%}
 input[type=range]{accent-color:var(--accent);height:18px;margin:0;cursor:pointer}
 
 #zoom{bottom:16px;right:16px;display:flex;align-items:center;padding:4px;gap:0}
 #zoom .tbtn{width:32px;height:32px}
 #zoomVal{min-width:52px;height:32px;border:0;background:transparent;border-radius:8px;font-size:12.5px;cursor:pointer;color:var(--ink);font-variant-numeric:tabular-nums}
-#zoomVal:hover{background:#f0f1f4}
+#zoomVal:hover{background:var(--hover)}
 
 #props{top:70px;right:16px;width:264px;max-height:calc(100% - 150px);overflow:auto;padding:14px 14px 10px;display:none}
 #props.show{display:block}
@@ -125,17 +160,17 @@ input[type=range]{accent-color:var(--accent);height:18px;margin:0;cursor:pointer
 .prow{display:grid;grid-template-columns:92px 1fr 40px;align-items:center;gap:8px;font-size:12.5px;margin:6px 0}
 .prow input[type=range]{width:100%}
 .prow .val{text-align:right;color:var(--ink-dim);font-variant-numeric:tabular-nums;font-size:12px}
-.prow input[type=color]{width:100%;height:24px;border:1px solid var(--panel-line);border-radius:6px;padding:1px;background:#fff;cursor:pointer}
+.prow input[type=color]{width:100%;height:24px;border:1px solid var(--panel-line);border-radius:6px;padding:1px;background:var(--field);cursor:pointer}
 .presets{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border:1px solid var(--panel-line);background:#fafafb;border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
+.chip{border:1px solid var(--panel-line);background:var(--soft);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
 .chip:hover{border-color:var(--accent);color:var(--accent-ink)}
 .acts{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
-.acts .tbtn{width:100%;height:34px;background:#f6f6f8}
-.acts .tbtn:hover{background:#eceef3}
+.acts .tbtn{width:100%;height:34px;background:var(--soft)}
+.acts .tbtn:hover{background:var(--hover)}
 .acts .tbtn.danger{color:#d9363e}
 .acts .tbtn[data-tip]:hover::after{top:auto;bottom:calc(100% + 6px)}
 .wide{display:flex;gap:6px;margin-top:8px}
-.wbtn{flex:1;height:32px;border:1px solid var(--panel-line);background:#fff;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:6px}
+.wbtn{flex:1;height:32px;border:1px solid var(--panel-line);background:var(--field);border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:6px}
 .wbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
 .wbtn svg{width:15px;height:15px}
 
@@ -151,16 +186,16 @@ input[type=range]{accent-color:var(--accent);height:18px;margin:0;cursor:pointer
 #drop{position:absolute;inset:12px;border:2px dashed var(--accent);border-radius:18px;background:rgba(91,140,255,.08);display:none;place-items:center;pointer-events:none;font-weight:600;color:var(--accent-ink);font-size:15px;z-index:30}
 #stage.dropping #drop{display:grid}
 
-#menu{position:fixed;z-index:50;min-width:210px;max-height:min(420px,calc(100vh - 16px));overflow:auto;background:#fff;color:var(--ink);border:1px solid var(--panel-line);border-radius:10px;padding:5px;box-shadow:var(--shadow);display:none;font-size:13px}
+#menu{position:fixed;z-index:50;min-width:210px;max-height:min(420px,calc(100vh - 16px));overflow:auto;background:var(--panel);color:var(--ink);border:1px solid var(--panel-line);border-radius:10px;padding:5px;box-shadow:var(--shadow);display:none;font-size:13px}
 .mi span{overflow:hidden;text-overflow:ellipsis;max-width:260px}
 .mi.note:hover{background:var(--note-soft)}
 .mi .chk{margin-left:auto;color:var(--note);font-weight:700;padding-left:10px}
 #menu.show{display:block}
 .mi{display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:6px;cursor:pointer;white-space:nowrap}
 .mi svg{width:16px;height:16px;color:#8a8d96}
-.mi:hover{background:#f0f1f4}
+.mi:hover{background:var(--hover)}
 .mi.danger,.mi.danger svg{color:#d9363e}
-.mi.danger:hover{background:#fdeeee}
+.mi.danger:hover{background:var(--danger-soft)}
 .msep{height:1px;background:var(--panel-line);margin:4px 2px}
 
 /* ---------- narrow windows ---------- */
@@ -224,8 +259,8 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 /* PNG preview (Telegram can't download files: save by long-press or share) */
 #pngView{position:fixed;inset:0;z-index:58;background:rgba(20,20,24,.55);display:none;place-items:center;padding:16px}
 #pngView.show{display:grid}
-#pngView .card{background:#fff;border-radius:16px;padding:12px;max-width:min(560px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-#pngView img{max-width:100%;max-height:60vh;object-fit:contain;border-radius:10px;background:#f3f3f0;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+#pngView .card{background:var(--panel);border-radius:16px;padding:12px;max-width:min(560px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+#pngView img{max-width:100%;max-height:60vh;object-fit:contain;border-radius:10px;background:var(--stage);-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
 #pngView p{margin:0;font-size:13px;color:var(--ink-dim);text-align:center;line-height:1.4}
 #pngView .btns{display:flex;gap:8px}
 #pngView .btns>*{flex:1;height:40px}
@@ -233,16 +268,16 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 /* ---------- main menu (project list) ---------- */
 .brand #goHome{margin-left:auto}
 #projName{overflow:hidden;text-overflow:ellipsis;min-width:0}
-#home{position:fixed;inset:0;z-index:45;display:none;overflow:auto;background:var(--stage);background-image:radial-gradient(#d6d6d1 1px,transparent 1.2px);background-size:24px 24px;-webkit-user-select:none;user-select:none}
+#home{position:fixed;inset:0;z-index:45;display:none;overflow:auto;background:var(--stage);background-image:radial-gradient(var(--grid) 1px,transparent 1.2px);background-size:24px 24px;-webkit-user-select:none;user-select:none}
 #home.show{display:block}
 .hwrap{max-width:560px;margin:0 auto;padding:calc(56px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom))}
 .hhead{text-align:center;margin-bottom:26px}
 .hhead .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px}
 .hhead .logo svg{width:30px;height:30px}
 .hhead h1{margin:0;font-size:28px;letter-spacing:-.02em;color:var(--ink)}
-.hhead h1 b{font-weight:400;color:#6b6e76}
+.hhead h1 b{font-weight:400;color:var(--ink-dim)}
 .hhead p{margin:6px 0 0;color:var(--ink-dim);font-size:14px}
-.hcont{display:none;width:100%;text-align:left;border:0;background:#141414;color:#fff;border-radius:14px;padding:14px 16px;cursor:pointer;margin-bottom:22px;box-shadow:var(--shadow)}
+.hcont{display:none;width:100%;text-align:left;border:0;background:var(--logo-bg);color:var(--logo-fg);border-radius:14px;padding:14px 16px;cursor:pointer;margin-bottom:22px;box-shadow:var(--shadow)}
 .hcont.show{display:block}
 .hcont small{display:block;opacity:.6;font-size:12px;margin-bottom:2px}
 .hcont b{font-size:15px}
@@ -250,17 +285,17 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 .hsec .pbtn{text-transform:none;letter-spacing:0;font-size:13px;padding:8px 12px}
 .hform{display:none;gap:8px;margin-bottom:12px}
 .hform.show{display:flex}
-.hform input{flex:1;min-width:0;border:1px solid var(--panel-line);border-radius:10px;padding:10px 12px;font:inherit;font-size:16px;outline:none;background:#fff}
+.hform input{flex:1;min-width:0;border:1px solid var(--panel-line);border-radius:10px;padding:10px 12px;font:inherit;font-size:16px;outline:none;background:var(--field);color:var(--ink)}
 .hform input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,140,255,.15)}
 #homeList{display:flex;flex-direction:column;gap:8px}
-.prj{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--panel-line);border-radius:14px;padding:12px 10px 12px 14px;cursor:pointer;box-shadow:0 1px 2px rgba(16,18,24,.04)}
-.prj:hover{border-color:#cfd6e6}
-.prj .pico{width:38px;height:38px;border-radius:10px;background:#fbf3e3;color:#d39b2a;display:grid;place-items:center;flex:none}
+.prj{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;padding:12px 10px 12px 14px;cursor:pointer;box-shadow:0 1px 2px rgba(16,18,24,.04)}
+.prj:hover{border-color:var(--accent)}
+.prj .pico{width:38px;height:38px;border-radius:10px;background:var(--folder-soft);color:#d39b2a;display:grid;place-items:center;flex:none}
 .prj .pinfo{flex:1;min-width:0}
 .prj .pinfo b,.prj .pinfo input{display:block;font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prj .pinfo input{width:100%;border:1px solid var(--accent);border-radius:6px;padding:3px 6px;font:inherit;font-size:16px;font-weight:600;outline:none}
 .prj .pinfo small{color:var(--ink-dim);font-size:12.5px}
-.hempty{text-align:center;color:var(--ink-dim);font-size:14px;padding:28px 10px;background:rgba(255,255,255,.6);border:1px dashed #d8d8d3;border-radius:14px}
+.hempty{text-align:center;color:var(--ink-dim);font-size:14px;padding:28px 10px;background:var(--soft);border:1px dashed var(--panel-line);border-radius:14px}
 
 /* landscape phones: wide but very low, so everything gets thinner and the bars sit in single rows */
 @media (max-height:500px){
@@ -293,7 +328,7 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div class="brand"><div class="logo" id="logo"></div><span>Vortex<b>Board</b></span><button class="sbtn" id="goHome" title="Все проекты"></button></div>
+    <div class="brand"><div class="logo" id="logo"></div><span>Vortex<b>Board</b></span><button class="sbtn" id="themeBtn" title="Тема" style="margin-left:auto"></button><button class="sbtn" id="goHome" title="Все проекты" style="margin-left:0"></button></div>
     <div class="sec">
       <span id="projName">Проект</span>
       <div class="btns">
@@ -353,9 +388,11 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
     </div>
     <div id="drop">Отпустите, чтобы добавить фото на доску</div>
     <div id="noteTip"></div>
+    <textarea id="textEd" spellcheck="false" autocomplete="off" rows="1"></textarea>
   </main>
 </div>
 <div id="home">
+  <button class="sbtn" id="homeTheme" title="Тема"></button>
   <div class="hwrap">
     <div class="hhead">
       <div class="logo" id="homeLogo"></div>
@@ -437,6 +474,13 @@ const ICONS = {
   note: '<path d="M5.5 4h13A1.5 1.5 0 0120 5.5V14l-6 6H5.5A1.5 1.5 0 014 18.5v-13A1.5 1.5 0 015.5 4z"/><path d="M14 20v-4.5a1.5 1.5 0 011.5-1.5H20"/><path d="M8 9h8M8 12.5h4.5"/>',
   notePlus: '<path d="M5.5 4h13A1.5 1.5 0 0120 5.5V12M12 20H5.5A1.5 1.5 0 014 18.5v-13A1.5 1.5 0 015.5 4"/><path d="M8 9h8M8 12.5h4.5"/><path d="M18 15v6M15 18h6"/>',
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+  text: '<path d="M5 6V4.5h14V6"/><path d="M12 4.5V20"/><path d="M9 20h6"/>',
+  theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 000-17z" fill="currentColor"/>',
+  bold: '<path d="M7 5h6a3.5 3.5 0 010 7H7zM7 12h7a3.5 3.5 0 010 7H7z"/>',
+  italic: '<path d="M10 5h8M6 19h8M14 5l-4 14"/>',
+  alignL: '<path d="M4 6h16M4 10h10M4 14h16M4 18h10"/>',
+  alignC: '<path d="M4 6h16M7 10h10M4 14h16M7 18h10"/>',
+  alignR: '<path d="M4 6h16M10 10h10M4 14h16M10 18h10"/>',
   vortex: '<path d="M12 12.5a1.5 1.5 0 10-1.5-1.5c0 2.2 2.4 3.6 4.5 3 2.6-.7 3.6-3.8 2.3-6.1C15.7 5 11.7 4.2 8.8 5.9 5.5 7.9 4.6 12.5 6.6 15.7c2.3 3.7 7.6 4.6 11.3 2.4"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
@@ -553,7 +597,8 @@ const TOOLS = [
   { id: 'highlighter', name: 'Текстовыделитель', key: 'I', icon: 'highlighter', size: 24 },
   { id: 'calligraphy', name: 'Каллиграфия', key: 'K', icon: 'calligraphy', size: 14 },
   { id: 'spray', name: 'Аэрограф', key: 'A', icon: 'spray', size: 44 },
-  { id: 'eraser', name: 'Ластик', key: 'E', icon: 'eraser', size: 30 }
+  { id: 'eraser', name: 'Ластик', key: 'E', icon: 'eraser', size: 30 },
+  { id: 'text', name: 'Текст', key: 'T', icon: 'text', size: 36 }
 ];
 const DRAW_TOOLS = new Set(['pen', 'marker', 'pencil', 'highlighter', 'calligraphy', 'spray', 'eraser']);
 const COLORS = ['#1e1e1e', '#ffffff', '#e03131', '#f08c00', '#fcc419', '#2f9e44', '#1c7ed6', '#7048e8', '#e64980', '#868e96'];
@@ -561,6 +606,7 @@ const COLORS = ['#1e1e1e', '#ffffff', '#e03131', '#f08c00', '#fcc419', '#2f9e44'
 const st = { tool: 'pen', color: '#1e1e1e', opacity: 100, sizes: {} };
 TOOLS.forEach(t => { if (t.size) st.sizes[t.id] = t.size; });
 try { Object.assign(st, JSON.parse(localStorage.getItem('inkboard.tools') || '{}')); } catch (e) {}
+TOOLS.forEach(t => { if (t.size && st.sizes[t.id] == null) st.sizes[t.id] = t.size; }); // tools added after settings were saved
 const saveTools = () => { try { localStorage.setItem('inkboard.tools', JSON.stringify(st)); } catch (e) {} };
 
 let tree = { nodes: {}, current: null };
@@ -585,6 +631,7 @@ const cv = $('#board'), ctx = cv.getContext('2d');
 const layer = document.createElement('canvas'), lctx = layer.getContext('2d');
 const base = document.createElement('canvas'), bctx = base.getContext('2d');
 let dpr = 1, W = 0, H = 0, baseValid = false;
+let themeColors = { board: '#f3f3f0', grid: '#d6d6d1', export: '#ffffff', header: '#fbfbf9' }; // set by applyTheme
 let baseView = null;   // view the base cache was rendered with
 let fastUntil = 0;     // during pan / pinch / wheel the cached bitmap is moved instead of redrawn
 
@@ -603,7 +650,7 @@ function setView(c) { const v = cur.view; c.setTransform(dpr * v.z, 0, 0, dpr * 
 
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#f3f3f0'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = themeColors.board; ctx.fillRect(0, 0, cv.width, cv.height);
   if (!cur) return;
   drawGrid();
   const v = cur.view, gesture = (drag && (drag.mode === 'pan' || drag.mode === 'pinch')) || Date.now() < fastUntil;
@@ -624,6 +671,7 @@ function render() {
     ctx.drawImage(layer, 0, 0);
   } else ctx.drawImage(base, 0, 0);
   setView(ctx); drawSelection();
+  if (editingTextId) placeTextEd(); // follow pan / zoom
   drawNoteBadges();
   drawBrushCursor();
 }
@@ -633,14 +681,55 @@ function drawGrid() {
   while (step < 12) step *= 2;
   const ox = ((v.x % step) + step) % step, oy = ((v.y % step) + step) % step;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#d6d6d1';
+  ctx.fillStyle = themeColors.grid;
   const s = 1.6;
   ctx.beginPath();
   for (let x = ox; x < W; x += step) for (let y = oy; y < H; y += step) ctx.rect(x - s / 2, y - s / 2, s, s);
   ctx.fill();
 }
 
-function drawObj(c, o) { if (o.type === 'image') drawImageObj(c, o); else drawStroke(c, o); }
+function drawObj(c, o) { if (o.type === 'image') drawImageObj(c, o); else if (o.type === 'text') drawTextObj(c, o); else drawStroke(c, o); }
+const isBoxed = o => !!o && (o.type === 'image' || o.type === 'text'); // objects with a frame: selectable, notes
+
+/* ---------- text ---------- */
+const FONTS = {
+  sans: { name: 'Обычный', css: '"Segoe UI",Inter,system-ui,-apple-system,sans-serif' },
+  serif: { name: 'С засечками', css: 'Georgia,"Times New Roman",serif' },
+  mono: { name: 'Моно', css: 'Consolas,"Courier New",monospace' },
+  hand: { name: 'Рукописный', css: 'Caveat,"Segoe Print","Comic Sans MS",cursive' }
+};
+const TEXT_LH = 1.25, TEXT_PAD = 0.25; // line height and background padding, in font sizes
+const textFont = (o, size = o.size) => `${o.italic ? 'italic ' : ''}${o.bold ? 700 : 400} ${size}px ${(FONTS[o.font] || FONTS.sans).css}`;
+const mctx = document.createElement('canvas').getContext('2d');
+// text boxes keep their top-left corner; width/height follow the text
+function measureText(o) {
+  mctx.font = textFont(o);
+  const lines = (o.text || '').split('\n');
+  const w = Math.max(...lines.map(l => mctx.measureText(l || ' ').width));
+  const pad = o.bg ? o.size * TEXT_PAD * 2 : 0;
+  o.w = Math.max(o.size * 0.6, w) + pad; o.h = lines.length * o.size * TEXT_LH + pad;
+}
+function drawTextObj(c, o) {
+  if (o.id === editingTextId) return; // the live editor shows it meanwhile
+  c.save();
+  c.translate(o.x + o.w / 2, o.y + o.h / 2); c.rotate(o.rot || 0); c.scale(o.flipX ? -1 : 1, o.flipY ? -1 : 1);
+  c.globalAlpha = (o.opacity == null ? 100 : o.opacity) / 100;
+  const x = -o.w / 2, y = -o.h / 2, pad = o.bg ? o.size * TEXT_PAD : 0, lh = o.size * TEXT_LH;
+  if (o.bg) { c.fillStyle = o.bg; rrect(c, x, y, o.w, o.h, o.size * 0.25); c.fill(); }
+  c.font = textFont(o); c.fillStyle = o.color; c.textBaseline = 'middle'; c.textAlign = o.align || 'left';
+  const tx = o.align === 'center' ? 0 : o.align === 'right' ? x + o.w - pad : x + pad;
+  (o.text || '').split('\n').forEach((l, i) => c.fillText(l, tx, y + pad + lh * (i + 0.5)));
+  c.restore();
+}
+// the handwriting font comes from Google Fonts; once it arrives, re-measure and redraw
+if (document.fonts) {
+  document.fonts.load('400 32px Caveat').catch(() => {});
+  document.fonts.addEventListener('loadingdone', () => {
+    if (!cur) return;
+    cur.objects.forEach(o => { if (o.type === 'text' && o.font === 'hand') measureText(o); });
+    baseValid = false; requestRender();
+  });
+}
 
 function tracePath(c, p) {
   c.beginPath(); c.moveTo(p[0][0], p[0][1]);
@@ -784,9 +873,9 @@ function toLocal(o, p) {
   const { ux, uy, cx, cy } = axes(o), dx = p.x - cx, dy = p.y - cy;
   return { x: dx * ux[0] + dy * ux[1], y: dx * uy[0] + dy * uy[1] };
 }
-function hitImage(p) {
+function hitObject(p) {
   for (let i = cur.objects.length - 1; i >= 0; i--) {
-    const o = cur.objects[i]; if (o.type !== 'image') continue;
+    const o = cur.objects[i]; if (!isBoxed(o)) continue;
     const l = toLocal(o, p); if (Math.abs(l.x) <= o.w / 2 && Math.abs(l.y) <= o.h / 2) return o;
   }
   return null;
@@ -799,8 +888,8 @@ function hitHandle(o, sx, sy) {
   return null;
 }
 function objBounds(o) {
-  if (o.type === 'image') {
-    const cs = corners(o), pad = (o.f.border || 0) / 2 + (o.f.shadow || 0) * 1.6;
+  if (isBoxed(o)) {
+    const cs = corners(o), pad = o.type === 'text' ? 2 : (o.f.border || 0) / 2 + (o.f.shadow || 0) * 1.6;
     return [Math.min(...cs.map(c => c.x)) - pad, Math.min(...cs.map(c => c.y)) - pad, Math.max(...cs.map(c => c.x)) + pad, Math.max(...cs.map(c => c.y)) + pad];
   }
   if (o.tool === 'eraser') return null;
@@ -854,7 +943,10 @@ function drawBrushCursor() {
 /* =========================================================
    History & saving
    ========================================================= */
-const snap = () => cur.objects.map(o => o.type === 'image' ? { ...o, f: { ...o.f } } : o);
+// strokes never change once drawn; photos and texts are edited in place, so history keeps copies of them
+const copyObj = o => o.type === 'image' ? { ...o, f: { ...o.f } } : o.type === 'text' ? { ...o } : o;
+const snapOf = objs => objs.map(copyObj);
+const snap = () => snapOf(cur.objects);
 function pushHistory(s) {
   undoStack.push(s || snap()); if (undoStack.length > 100) undoStack.shift();
   redoStack.length = 0; updateHistBtns();
@@ -934,6 +1026,64 @@ function startHold(hit, e) {
 }
 
 cv.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
+cv.addEventListener('dblclick', e => { // double-click a text to edit it
+  if (!cur) return;
+  const hit = hitObject(evPos(e));
+  if (hit && hit.type === 'text') { e.preventDefault(); startTextEdit(hit, false); }
+});
+
+/* inline text editor: a textarea laid exactly over the text while typing */
+let editingTextId = null, textEdBefore = null, textEdIsNew = false;
+const textEd = () => $('#textEd');
+const editingText = () => cur && editingTextId ? cur.objects.find(x => x.id === editingTextId) : null;
+function startTextEdit(o, isNew) {
+  if (editingTextId && editingTextId !== o.id) endTextEdit();
+  hideMenu(); hideNoteTip(); panelOpen = false;
+  editingTextId = o.id; textEdIsNew = isNew; textEdBefore = isNew ? null : snap();
+  selectedId = o.id; updatePanel();
+  const ed = textEd(); ed.value = o.text; ed.style.display = 'block'; placeTextEd();
+  ed.focus(); if (!isNew) ed.select();
+  baseValid = false; requestRender();
+}
+function placeTextEd() {
+  const o = editingText(), ed = textEd(); if (!o) return;
+  const z = cur.view.z, c = toScreen({ x: o.x + o.w / 2, y: o.y + o.h / 2 }), pad = (o.bg ? o.size * TEXT_PAD : 0) * z;
+  const w = o.w * z + 4, h = o.h * z + 2;
+  Object.assign(ed.style, {
+    font: textFont(o, o.size * z), lineHeight: TEXT_LH, color: o.color, background: o.bg || 'transparent',
+    textAlign: o.align || 'left', padding: pad + 'px', width: w + 'px', height: h + 'px',
+    left: (c.x - w / 2) + 'px', top: (c.y - h / 2) + 'px', transform: `rotate(${o.rot || 0}rad)`,
+    opacity: (o.opacity == null ? 100 : o.opacity) / 100, borderRadius: o.size * 0.25 * z + 'px'
+  });
+}
+function endTextEdit() {
+  if (!editingTextId) return;
+  const o = editingText(), id = editingTextId, ed = textEd();
+  editingTextId = null; ed.style.display = 'none';
+  if (document.activeElement === ed) ed.blur();
+  if (!o) return;
+  if (!o.text.trim()) { // an empty text is removed
+    cur.objects = cur.objects.filter(x => x.id !== id); selectedId = null;
+    if (!textEdIsNew && textEdBefore) pushHistory(textEdBefore);
+  } else if (textEdIsNew) {
+    pushHistory(snapOf(cur.objects.filter(x => x.id !== id)));
+    setTool('select'); selectedId = id;
+  } else if (textEdBefore) {
+    const was = textEdBefore.find(x => x.id === id);
+    if (!was || was.text !== o.text) pushHistory(textEdBefore);
+  }
+  textEdBefore = null;
+  updatePanel(); changed(); updateCursor();
+}
+textEd().addEventListener('input', e => {
+  const o = editingText(); if (!o) return;
+  o.text = e.target.value; measureText(o); placeTextEd(); requestRender();
+});
+textEd().addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== textEd()) endTextEdit(); }, 0));
+textEd().addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); endTextEdit(); }
+});
 cv.addEventListener('pointerdown', e => {
   if (!cur) return;
   hideNoteTip();
@@ -959,12 +1109,12 @@ cv.addEventListener('pointerdown', e => {
         drag = { mode: 'rot', o: sel, before, cx, cy, a0: Math.atan2(p.y - cy, p.x - cx), r0: sel.rot || 0 };
       } else {
         const { ux, uy, cx, cy } = axes(sel);
-        drag = { mode: 'scale', o: sel, before, sx: h.sx, sy: h.sy, ux, uy, w0: sel.w, h0: sel.h,
+        drag = { mode: 'scale', o: sel, before, sx: h.sx, sy: h.sy, ux, uy, w0: sel.w, h0: sel.h, size0: sel.size,
           ax: cx - h.sx * sel.w / 2 * ux[0] - h.sy * sel.h / 2 * uy[0], ay: cy - h.sx * sel.w / 2 * ux[1] - h.sy * sel.h / 2 * uy[1] };
       }
       return;
     }
-    const hit = hitImage(p);
+    const hit = hitObject(p);
     select(hit ? hit.id : null);
     if (hit) {
       drag = { mode: 'move', o: hit, before: snap(), dx: p.x - hit.x, dy: p.y - hit.y, moved: false, sx0: p.sx, sy0: p.sy };
@@ -972,11 +1122,21 @@ cv.addEventListener('pointerdown', e => {
     }
     return;
   }
+  if (st.tool === 'text') {
+    e.preventDefault(); // keep focus in the text editor instead of the canvas
+    const hit = hitObject(p);
+    if (hit && hit.type === 'text') { startTextEdit(hit, false); return; }
+    const o = { type: 'text', id: uid(), x: p.x, y: p.y, text: '', size: st.sizes.text / cur.view.z, color: st.color,
+      font: st.font || 'sans', bold: false, italic: false, align: 'left', bg: null, rot: 0, opacity: 100 };
+    measureText(o); o.y -= o.h / 2; // the click marks the middle of the first line
+    cur.objects.push(o); startTextEdit(o, true);
+    return;
+  }
   if (DRAW_TOOLS.has(st.tool)) {
     if (selectedId) select(null);
     drawing = { type: 'stroke', id: uid(), tool: st.tool, color: st.color, size: st.sizes[st.tool], opacity: st.opacity,
       pts: [[p.x, p.y]], seed: (Math.random() * 1e9) | 0 };
-    if (e.pointerType === 'touch') { const hit = hitImage(p); if (hit) startHold(hit, e); } // holding still on a photo = its menu
+    if (e.pointerType === 'touch') { const hit = hitObject(p); if (hit) startHold(hit, e); } // holding still on a photo = its menu
     baseValid = false;
     if (st.tool === 'spray') {
       drawing.dots = []; sprayAt(p.x, p.y);
@@ -1019,8 +1179,12 @@ cv.addEventListener('pointermove', e => {
       const dx = p.x - ax, dy = p.y - ay;
       const lx = (dx * ux[0] + dy * ux[1]) * sx, ly = (dx * uy[0] + dy * uy[1]) * sy;
       let nw, nh;
-      if (e.shiftKey) { nw = Math.max(10, lx); nh = Math.max(10, ly); }
-      else { const k = Math.max(10 / Math.min(w0, h0), (lx * w0 + ly * h0) / (w0 * w0 + h0 * h0)); nw = w0 * k; nh = h0 * k; }
+      if (e.shiftKey && o.type !== 'text') { nw = Math.max(10, lx); nh = Math.max(10, ly); }
+      else {
+        const k = Math.max(10 / Math.min(w0, h0), (lx * w0 + ly * h0) / (w0 * w0 + h0 * h0));
+        if (o.type === 'text') { o.size = clamp(drag.size0 * k, 4, 2000); measureText(o); nw = o.w; nh = o.h; } // text scales by font size
+        else { nw = w0 * k; nh = h0 * k; }
+      }
       const cx = ax + sx * nw / 2 * ux[0] + sy * nh / 2 * uy[0], cy = ay + sx * nw / 2 * ux[1] + sy * nh / 2 * uy[1];
       o.w = nw; o.h = nh; o.x = cx - nw / 2; o.y = cy - nh / 2; drag.moved = true;
     }
@@ -1057,6 +1221,7 @@ function endPointer(e) {
     drag = null; updateCursor();
     if (tapped && e.pointerType === 'touch') updateNoteTip(evPos(e)); // phones have no hover: a tap shows the note card
   }
+  if (editingTextId && document.activeElement !== textEd()) textEd().focus(); // iOS opens the keyboard only from a finished tap
   requestRender();
 }
 cv.addEventListener('pointerup', endPointer);
@@ -1068,10 +1233,11 @@ function updateCursor(p) {
   if (drag && drag.mode === 'pan') c = 'grabbing';
   else if (spaceDown || st.tool === 'hand') c = 'grab';
   else if (DRAW_TOOLS.has(st.tool)) { const d = brushDiameter(); c = ringCursor(d > CURSOR_MAX ? 10 : Math.max(8, d)); }
+  else if (st.tool === 'text') c = 'text';
   else if (st.tool === 'select' && p && cur) {
     const sel = getSel(), h = sel && hitHandle(sel, p.sx, p.sy);
     if (h) c = h.type === 'rot' ? 'grab' : (h.sx * h.sy > 0 ? 'nwse-resize' : 'nesw-resize');
-    else if (hitImage(p)) c = 'move';
+    else if (hitObject(p)) c = 'move';
   }
   if (cv.style.cursor !== c) cv.style.cursor = c;
 }
@@ -1113,7 +1279,7 @@ function zoomFit() {
 cv.addEventListener('contextmenu', e => {
   e.preventDefault();
   if (!cur || Date.now() < suppressContextUntil) return;
-  const hit = hitImage(evPos(e));
+  const hit = hitObject(evPos(e));
   if (hit) showObjectMenu(hit, e.clientX, e.clientY);
   else exportBoard(cur.id);
 });
@@ -1200,7 +1366,7 @@ async function renderPNG(objects, transparent) {
   const l = lay.getContext('2d'), x = out.getContext('2d');
   l.setTransform(s, 0, 0, s, (pad - b[0]) * s, (pad - b[1]) * s);
   for (const o of objects) drawObj(l, o);
-  if (!transparent) { x.fillStyle = '#ffffff'; x.fillRect(0, 0, out.width, out.height); }
+  if (!transparent) { x.fillStyle = themeColors.export; x.fillRect(0, 0, out.width, out.height); }
   x.drawImage(lay, 0, 0);
   return new Promise(r => out.toBlob(r, 'image/png'));
 }
@@ -1255,8 +1421,41 @@ const PRESETS = {
 const rowHTML = ([k, label, min, max]) => `<div class="prow"><span>${label}</span><input type="range" data-k="${k}" min="${min}" max="${max}" step="1"><span class="val" data-v="${k}"></span></div>`;
 
 function buildPanel() {
+  const closeBtn = `<button class="tbtn" data-act="close" title="Закрыть" style="width:28px;height:28px">${ic('plus').replace('class="i"', 'class="i" style="transform:rotate(45deg)"')}</button>`;
+  const commonActs = `
+      <button class="tbtn" data-act="rot90" data-tip="Повернуть 90°">${ic('rotate')}</button>
+      <button class="tbtn" data-act="dup" data-tip="Дублировать (Ctrl+D)">${ic('copy')}</button>
+      <button class="tbtn danger" data-act="del" data-tip="Удалить (Del)">${ic('trash')}</button>
+      <button class="tbtn" data-act="front" data-tip="На передний план">${ic('toFront')}</button>
+      <button class="tbtn" data-act="fwd" data-tip="Вперёд">${ic('up')}</button>
+      <button class="tbtn" data-act="bwd" data-tip="Назад">${ic('down')}</button>
+      <button class="tbtn" data-act="back" data-tip="На задний план">${ic('toBack')}</button>`;
   $('#props').innerHTML = `
-    <div class="ptitle"><span>Фото</span><button class="tbtn" data-act="close" title="Снять выделение" style="width:28px;height:28px">${ic('plus').replace('class="i"', 'class="i" style="transform:rotate(45deg)"')}</button></div>
+    <div class="ptxt">
+    <div class="ptitle"><span>Текст</span>${closeBtn}</div>
+    <div class="wide" style="margin:0 0 10px"><button class="wbtn" data-act="editText">${ic('edit')} Изменить текст</button></div>
+    <h4>Шрифт</h4>
+    <div class="presets">${Object.entries(FONTS).map(([k, f]) => `<button class="chip" data-font="${k}" style="font-family:${f.css.replace(/"/g, "'")}">${f.name}</button>`).join('')}</div>
+    <h4>Стиль</h4>
+    <div class="tg">
+      <button class="tbtn" data-tt="bold" title="Жирный">${ic('bold')}</button>
+      <button class="tbtn" data-tt="italic" title="Курсив">${ic('italic')}</button>
+      <button class="tbtn" data-align="left" title="По левому краю">${ic('alignL')}</button>
+      <button class="tbtn" data-align="center" title="По центру">${ic('alignC')}</button>
+      <button class="tbtn" data-align="right" title="По правому краю">${ic('alignR')}</button>
+    </div>
+    <div class="prow"><span>Размер</span><input type="range" data-t="size" min="8" max="240" step="1"><span class="val" data-tv="size"></span></div>
+    <div class="prow"><span>Непрозрачность</span><input type="range" data-t="opacity" min="5" max="100" step="1"><span class="val" data-tv="opacity"></span></div>
+    <div class="prow"><span>Цвет текста</span><input type="color" data-t="color"><span></span></div>
+    <div class="prow"><span>Фон</span><input type="color" data-t="bg"><button class="chip" data-tt="bg">Нет</button></div>
+    <h4>Действия</h4>
+    <div class="acts">${commonActs}
+      <button class="tbtn" data-act="reset" data-tip="Сбросить поворот">${ic('reset')}</button>
+      <button class="tbtn" data-act="savePng" data-tip="Сохранить PNG">${ic('download')}</button>
+    </div>
+    </div>
+    <div class="pimg">
+    <div class="ptitle"><span>Фото</span>${closeBtn}</div>
     <h4>Быстрые фильтры</h4>
     <div class="presets">${Object.keys(PRESETS).map(n => `<button class="chip" data-preset="${n}">${n}</button>`).join('')}</div>
     <h4>Цвет и свет</h4>
@@ -1279,13 +1478,31 @@ function buildPanel() {
       <button class="tbtn" data-act="back" data-tip="На задний план">${ic('toBack')}</button>
       <button class="tbtn" data-act="reset" data-tip="Сбросить всё">${ic('reset')}</button>
     </div>
-    <div class="wide"><button class="wbtn" data-act="savePng">${ic('download')} Сохранить фото PNG</button></div>`;
+    <div class="wide"><button class="wbtn" data-act="savePng">${ic('download')} Сохранить фото PNG</button></div>
+    </div>`;
 }
 function updatePanel() {
   const o = getSel(), p = $('#props');
   p.classList.toggle('show', !!o && panelOpen);
   syncBack();
   if (!o) return;
+  const isText = o.type === 'text';
+  p.querySelector('.ptxt').style.display = isText ? '' : 'none';
+  p.querySelector('.pimg').style.display = isText ? 'none' : '';
+  if (isText) {
+    p.querySelectorAll('[data-t]').forEach(inp => {
+      const k = inp.dataset.t;
+      inp.value = k === 'size' ? Math.round(o.size) : k === 'opacity' ? (o.opacity == null ? 100 : o.opacity) : k === 'bg' ? (o.bg || '#fff3a3') : o[k];
+    });
+    p.querySelector('[data-tv="size"]').textContent = Math.round(o.size) + 'px';
+    p.querySelector('[data-tv="opacity"]').textContent = (o.opacity == null ? 100 : o.opacity) + '%';
+    p.querySelectorAll('[data-font]').forEach(b => b.classList.toggle('on', b.dataset.font === (o.font || 'sans')));
+    p.querySelectorAll('[data-align]').forEach(b => b.classList.toggle('on', b.dataset.align === (o.align || 'left')));
+    p.querySelector('[data-tt="bold"]').classList.toggle('on', !!o.bold);
+    p.querySelector('[data-tt="italic"]').classList.toggle('on', !!o.italic);
+    const bgb = p.querySelector('[data-tt="bg"]'); bgb.textContent = o.bg ? 'Убрать' : 'Нет'; bgb.classList.toggle('on', !!o.bg);
+    return;
+  }
   p.querySelectorAll('[data-k]').forEach(inp => { inp.value = o.f[inp.dataset.k]; });
   p.querySelectorAll('[data-v]').forEach(sp => {
     const k = sp.dataset.v, row = [...FILTER_ROWS, ...STYLE_ROWS].find(r => r[0] === k);
@@ -1294,15 +1511,32 @@ function updatePanel() {
 }
 let panelSnap = null;
 $('#props').addEventListener('input', e => {
-  const k = e.target.dataset.k, o = getSel(); if (!k || !o) return;
+  const o = getSel(); if (!o) return;
+  const t = e.target.dataset.t, k = e.target.dataset.k;
+  if (!t && !k) return;
   if (!panelSnap) panelSnap = snap();
-  o.f[k] = e.target.type === 'color' ? e.target.value : +e.target.value;
-  if (k === 'tint' && !o.f.tintAmt) o.f.tintAmt = 35;
+  if (t) { // text style
+    o[t] = e.target.type === 'color' ? e.target.value : +e.target.value;
+    measureText(o);
+  } else {
+    o.f[k] = e.target.type === 'color' ? e.target.value : +e.target.value;
+    if (k === 'tint' && !o.f.tintAmt) o.f.tintAmt = 35;
+  }
   updatePanel(); baseValid = false; requestRender(); scheduleSave();
 });
 $('#props').addEventListener('change', () => { if (panelSnap) { pushHistory(panelSnap); panelSnap = null; } });
 $('#props').addEventListener('click', e => {
   const o = getSel(); if (!o) return;
+  const fontB = e.target.closest('[data-font]'), alignB = e.target.closest('[data-align]'), tt = e.target.closest('[data-tt]');
+  if (o.type === 'text' && (fontB || alignB || tt)) {
+    pushHistory();
+    if (fontB) o.font = st.font = fontB.dataset.font;
+    if (alignB) o.align = alignB.dataset.align;
+    if (tt) { const k = tt.dataset.tt; o[k] = k === 'bg' ? (o.bg ? null : '#fff3a3') : !o[k]; }
+    measureText(o); updatePanel(); changed(); saveTools();
+    if (o.font === 'hand' && document.fonts) document.fonts.load(textFont(o)).then(() => { measureText(o); baseValid = false; requestRender(); }).catch(() => {});
+    return;
+  }
   const pr = e.target.closest('[data-preset]');
   if (pr) {
     pushHistory();
@@ -1317,6 +1551,7 @@ function imageAction(act) {
   const o = getSel(); if (!o) return;
   if (act === 'close') { panelOpen = false; return updatePanel(); }
   if (act === 'savePng') return exportImage(o);
+  if (act === 'editText') return startTextEdit(o, false);
   pushHistory();
   const objs = cur.objects, j = objs.findIndex(x => x.id === o.id);
   const t = objs[j]; // same object; history snap holds copies
@@ -1325,7 +1560,7 @@ function imageAction(act) {
     case 'flipY': t.flipY = !t.flipY; break;
     case 'rot90': t.rot = ((t.rot || 0) + Math.PI / 2) % (Math.PI * 2); break;
     case 'dup': {
-      const c = { ...t, id: uid(), f: { ...t.f }, x: t.x + 30 / cur.view.z, y: t.y + 30 / cur.view.z };
+      const c = { ...copyObj(t), id: uid(), x: t.x + 30 / cur.view.z, y: t.y + 30 / cur.view.z };
       objs.push(c); selectedId = c.id; break;
     }
     case 'del': objs.splice(j, 1); selectedId = null; break;
@@ -1333,7 +1568,7 @@ function imageAction(act) {
     case 'back': objs.splice(j, 1); objs.unshift(t); break;
     case 'fwd': if (j < objs.length - 1) { objs[j] = objs[j + 1]; objs[j + 1] = t; } break;
     case 'bwd': if (j > 0) { objs[j] = objs[j - 1]; objs[j - 1] = t; } break;
-    case 'reset': t.f = defaultF(); t.rot = 0; t.flipX = t.flipY = false; break;
+    case 'reset': if (t.type === 'image') t.f = defaultF(); t.rot = 0; t.flipX = t.flipY = false; break;
   }
   updatePanel(); changed();
 }
@@ -1380,7 +1615,14 @@ function setTool(t) {
   if (t !== 'select' && selectedId && DRAW_TOOLS.has(t)) select(null);
   syncControls(); updateCursor(); requestRender();
 }
-function setColor(c) { st.color = c; if (st.tool === 'eraser' || !DRAW_TOOLS.has(st.tool)) st.tool = 'pen'; syncControls(); saveTools(); }
+function setColor(c) {
+  st.color = c;
+  const o = getSel();
+  if (o && o.type === 'text') { // recolour the selected text instead of switching tools
+    pushHistory(); o.color = c; updatePanel(); changed(); if (editingTextId === o.id) placeTextEd();
+  } else if (st.tool !== 'text' && (st.tool === 'eraser' || !DRAW_TOOLS.has(st.tool))) st.tool = 'pen';
+  syncControls(); saveTools();
+}
 function syncControls() {
   document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === st.tool));
   document.querySelectorAll('.sw[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c.toLowerCase() === st.color.toLowerCase()));
@@ -1473,6 +1715,7 @@ async function createNode(type, parent, rename = true) {
 }
 async function openBoard(id) {
   if (cur && cur.id === id) return;
+  endTextEdit();
   if (cur) await saveNow();
   const data = (await DB.get('board:' + id)) || {};
   const objects = data.objects || [], migrated = await hydrate(objects);
@@ -1627,7 +1870,7 @@ function showMenu(x, y, items) {
   for (const it of items) {
     if (it === '-') { const s = document.createElement('div'); s.className = 'msep'; menu.appendChild(s); continue; }
     const d = document.createElement('div'); d.className = 'mi' + (it.danger ? ' danger' : '') + (it.note ? ' note' : '');
-    d.innerHTML = ic(it.icon) + '<span></span>' + (it.checked ? '<b class="chk">✓</b>' : ''); d.querySelector('span').textContent = it.label;
+    d.innerHTML = (it.swatch ? `<i class="swd" style="background:${it.swatch}"></i>` : ic(it.icon)) + '<span></span>' + (it.checked ? '<b class="chk">✓</b>' : ''); d.querySelector('span').textContent = it.label;
     d.onclick = () => { hideMenu(); it.act(); };
     menu.appendChild(d);
   }
@@ -1686,7 +1929,9 @@ $('#noteEd').addEventListener('keydown', e => {
 function showObjectMenu(o, x, y) {
   select(o.id); hideNoteTip();
   const note = noteOf(o);
-  const items = [{ label: 'Редактировать', icon: 'edit', act: () => { setTool('select'); openPanel(o.id); } }];
+  const items = [];
+  if (o.type === 'text') items.push({ label: 'Изменить текст', icon: 'text', act: () => startTextEdit(o, false) });
+  items.push({ label: o.type === 'text' ? 'Стиль текста' : 'Редактировать', icon: 'edit', act: () => { setTool('select'); openPanel(o.id); } });
   if (note) {
     items.push({ label: `Открыть заметку «${note.name}»`, icon: 'note', note: true, act: () => openNoteEditor(note.id) });
     items.push({ label: 'Заменить заметку…', icon: 'notePlus', note: true, act: () => showNotePicker(o, x, y) });
@@ -1721,7 +1966,7 @@ function topRight(o) { return toScreen(corners(o).reduce((a, c) => (c.x - c.y > 
 function drawNoteBadges() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   for (const o of cur.objects) {
-    if (o.type !== 'image' || !noteOf(o)) continue;
+    if (!isBoxed(o) || !noteOf(o) || o.id === editingTextId) continue;
     const b = topRight(o);
     ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2);
     ctx.fillStyle = '#8b5cf6'; ctx.fill();
@@ -1737,8 +1982,9 @@ function hideNoteTip() { tipKey = null; tipEl.classList.remove('show'); }
 function updateNoteTip(p) {
   // never while the object is being moved, resized, rotated or edited
   if (!cur || !p || drag || drawing || editingNote || menu.classList.contains('show')) return hideNoteTip();
-  let o = hitImage(p);
-  if (!noteOf(o)) o = [...cur.objects].reverse().find(x => x.type === 'image' && noteOf(x) && Math.hypot(topRight(x).x - p.sx, topRight(x).y - p.sy) < 12);
+  let o = hitObject(p);
+  if (!noteOf(o)) o = [...cur.objects].reverse().find(x => isBoxed(x) && noteOf(x) && Math.hypot(topRight(x).x - p.sx, topRight(x).y - p.sy) < 12);
+  if (editingTextId) return hideNoteTip();
   const note = noteOf(o);
   if (!note || (panelOpen && selectedId === o.id)) return hideNoteTip();
   const key = o.id + '|' + note.name + '|' + note.text;
@@ -1795,7 +2041,6 @@ if (tg) {
   document.documentElement.classList.add('tg');
   tgCall(() => tg.ready()); tgCall(() => tg.expand());
   tgCall(() => tg.disableVerticalSwipes()); // otherwise drawing downwards swipes the app closed
-  tgCall(() => tg.setHeaderColor('#fbfbf9')); tgCall(() => tg.setBackgroundColor('#f3f3f0')); tgCall(() => tg.setBottomBarColor('#f3f3f0'));
   const fitHeight = () => document.documentElement.style.setProperty('--app-h', (tg.viewportStableHeight || innerHeight) + 'px');
   fitHeight(); tg.onEvent('viewportChanged', fitHeight);
   tgCall(() => tg.BackButton.onClick(goBack));
@@ -1816,9 +2061,47 @@ function syncBack() {
   tgCall(() => open ? tg.BackButton.show() : tg.BackButton.hide());
 }
 
+/* ---------- themes ---------- */
+const THEMES = [
+  { id: 'light', name: 'Светлая', swatch: '#f3f3f0' },
+  { id: 'dark', name: 'Тёмная', swatch: '#23252a' },
+  { id: 'green', name: 'Зелёная', swatch: '#2f9e5b' },
+  { id: 'blue', name: 'Голубая', swatch: '#2f7de1' }
+];
+const currentTheme = () => document.documentElement.dataset.theme || 'light';
+function applyTheme(id, persist) {
+  const prev = currentTheme();
+  document.documentElement.dataset.theme = id;
+  const cs = getComputedStyle(document.documentElement), v = k => cs.getPropertyValue(k).trim();
+  themeColors = { board: v('--stage'), grid: v('--grid'), export: v('--export'), header: v('--sb-bg') };
+  document.querySelector('meta[name="theme-color"]').content = themeColors.header;
+  if (tg) {
+    tgCall(() => tg.setHeaderColor(themeColors.header));
+    tgCall(() => tg.setBackgroundColor(themeColors.board));
+    tgCall(() => tg.setBottomBarColor(themeColors.board));
+  }
+  if (persist) {
+    try { localStorage.setItem('vb.theme', id); } catch (e) {}
+    // black ink vanishes on the dark board (and white on light ones): swap the pen colour along with the theme
+    const swap = id === 'dark' && prev !== 'dark' && st.color === '#1e1e1e' ? '#ffffff'
+      : id !== 'dark' && prev === 'dark' && st.color === '#ffffff' ? '#1e1e1e' : null;
+    if (swap) { st.color = swap; syncControls(); saveTools(); }
+  }
+  baseValid = false; requestRender();
+}
+function showThemeMenu(anchor) {
+  const r = anchor.getBoundingClientRect();
+  showMenu(r.left, r.bottom + 6, THEMES.map(t => ({ label: t.name, swatch: t.swatch, checked: t.id === currentTheme(), act: () => applyTheme(t.id, true) })));
+}
+$('#themeBtn').innerHTML = $('#homeTheme').innerHTML = ic('theme');
+$('#themeBtn').onclick = e => showThemeMenu(e.currentTarget);
+$('#homeTheme').onclick = e => showThemeMenu(e.currentTarget);
+applyTheme(currentTheme());
+
 /* ---------- main menu: list of projects ---------- */
 const homeOpen = () => $('#home').classList.contains('show');
 function showHome() {
+  endTextEdit();
   if (cur) saveNow();
   closeDrawer(); hideMenu(); hideNoteTip(); closeNoteEditor();
   $('#homeForm').classList.remove('show');
