@@ -1913,7 +1913,7 @@ $('#pngShare').onclick = () => { if (pngFile) navigator.share({ files: [pngFile]
 
 // Address of the bot's server (bot-worker.js on Cloudflare). It holds the bot token and sends the PNG to the chat.
 // Empty = feature off: Telegram then falls back to the share sheet / long-press preview.
-const BOT_API = '';
+const BOT_API = 'https://vortexboard-bot.mazidkazimov.workers.dev';
 async function sendToChat(file) {
   const fd = new FormData();
   fd.append('initData', tg.initData); // signed by Telegram: the server checks it and learns who to send to
