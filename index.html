@@ -713,11 +713,17 @@ function drawTextObj(c, o) {
   if (o.id === editingTextId) return; // the live editor shows it meanwhile
   c.save();
   c.translate(o.x + o.w / 2, o.y + o.h / 2); c.rotate(o.rot || 0); c.scale(o.flipX ? -1 : 1, o.flipY ? -1 : 1);
+  // Draw at the real pixel size instead of a world-size font under a scaled transform:
+  // Safari/iOS (and so Telegram on iPhone) breaks up or drops text drawn that way when zooming.
+  const t = c.getTransform(), k = Math.hypot(t.a, t.b);
+  if (o.size * k < 0.5) { c.restore(); return; } // too small to see
+  c.scale(1 / k, 1 / k);
   c.globalAlpha = (o.opacity == null ? 100 : o.opacity) / 100;
-  const x = -o.w / 2, y = -o.h / 2, pad = o.bg ? o.size * TEXT_PAD : 0, lh = o.size * TEXT_LH;
-  if (o.bg) { c.fillStyle = o.bg; rrect(c, x, y, o.w, o.h, o.size * 0.25); c.fill(); }
-  c.font = textFont(o); c.fillStyle = o.color; c.textBaseline = 'middle'; c.textAlign = o.align || 'left';
-  const tx = o.align === 'center' ? 0 : o.align === 'right' ? x + o.w - pad : x + pad;
+  const w = o.w * k, h = o.h * k, x = -w / 2, y = -h / 2, size = o.size * k;
+  const pad = o.bg ? size * TEXT_PAD : 0, lh = size * TEXT_LH;
+  if (o.bg) { c.fillStyle = o.bg; rrect(c, x, y, w, h, size * 0.25); c.fill(); }
+  c.font = textFont(o, size); c.fillStyle = o.color; c.textBaseline = 'middle'; c.textAlign = o.align || 'left';
+  const tx = o.align === 'center' ? 0 : o.align === 'right' ? x + w - pad : x + pad;
   (o.text || '').split('\n').forEach((l, i) => c.fillText(l, tx, y + pad + lh * (i + 0.5)));
   c.restore();
 }
@@ -1996,10 +2002,12 @@ function updateNoteTip(p) {
     body.textContent = note.text && note.text.trim() ? note.text : 'Пустая заметка';
     body.classList.toggle('empty', !(note.text && note.text.trim()));
   }
-  const b = topRight(o), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
-  let x = b.x + 16, y = b.y - 12;
-  if (x + w > W - 8) x = b.x - 16 - w;
-  tipEl.style.left = clamp(x, 8, Math.max(8, W - w - 8)) + 'px';
+  // the card grows up and to the right from the object's top-right corner (the note badge);
+  // near the screen edges it slides inward but stays attached to that corner
+  const b = topRight(o), w = tipEl.offsetWidth, h = tipEl.offsetHeight, gap = 14;
+  let y = b.y - gap - h;
+  if (y < 8) y = b.y + gap; // no room above: hang below the corner
+  tipEl.style.left = clamp(b.x - 12, 8, Math.max(8, W - w - 8)) + 'px';
   tipEl.style.top = clamp(y, 8, Math.max(8, H - h - 8)) + 'px';
   tipEl.classList.add('show');
 }
