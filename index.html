@@ -43,6 +43,15 @@
   --hover:#e4ecf7; --on-bg:#d5e5fa; --on-ink:#1d5fb5; --field:#ffffff; --soft:#edf2f9; --grid:#c8d5e7;
   --logo-bg:#17345e; --logo-fg:#ffffff; --folder-soft:#f3f0e2; --export:#f3f7fc;
 }
+.sync{display:flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--sb-dim);font:inherit;font-size:11.5px;padding:0 16px 8px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden}
+.sync[hidden]{display:none}
+.sync span{overflow:hidden;text-overflow:ellipsis}
+.sync i{width:7px;height:7px;border-radius:50%;background:#9aa0ab;flex:none}
+.sync[data-state="ok"] i{background:#2f9e5b}
+.sync[data-state="busy"] i{background:var(--accent);animation:syncpulse 1s ease-in-out infinite}
+.sync[data-state="offline"] i,.sync[data-state="auth"] i,.sync[data-state="nostore"] i{background:#e8a33d}
+@keyframes syncpulse{50%{opacity:.25}}
+.hsync{margin:10px auto 0;padding:0;justify-content:center;color:var(--ink-dim)}
 .mi .swd{width:16px;height:16px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(127,127,127,.35)}
 #homeTheme{position:fixed;top:calc(14px + env(safe-area-inset-top));right:14px;z-index:46;background:var(--panel);border:1px solid var(--panel-line);box-shadow:var(--shadow);color:var(--ink)}
 *{box-sizing:border-box}
@@ -329,6 +338,7 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
 <div id="app">
   <aside id="sidebar">
     <div class="brand"><div class="logo" id="logo"></div><span>Vortex<b>Board</b></span><button class="sbtn" id="themeBtn" title="Тема" style="margin-left:auto"></button><button class="sbtn" id="goHome" title="Все проекты" style="margin-left:0"></button></div>
+    <button class="sync" hidden title="Синхронизировать сейчас"><i></i><span></span></button>
     <div class="sec">
       <span id="projName">Проект</span>
       <div class="btns">
@@ -398,6 +408,7 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
       <div class="logo" id="homeLogo"></div>
       <h1>Vortex<b>Board</b></h1>
       <p>Доски для рисования, фото и заметок</p>
+      <button class="sync hsync" hidden title="Синхронизировать сейчас"><i></i><span></span></button>
     </div>
     <button class="hcont" id="homeContinue"></button>
     <div class="hsec"><span>Проекты</span><button class="pbtn" id="homeNew">+ Новый проект</button></div>
@@ -973,14 +984,31 @@ let saveErrAt = 0;
 function saveNow() {
   clearTimeout(saveT); if (!cur) return Promise.resolve();
   const pr = projectDirty && tree.nodes[projectOf(cur.id)];
-  if (pr) { pr.updated = Date.now(); projectDirty = false; saveTree(); }
+  if (pr) {
+    const now = Date.now(), bn = tree.nodes[cur.id];
+    pr.updated = now; if (bn) bn.cAt = now; // cAt = when the board's content last changed (sync compares it)
+    projectDirty = false; saveTree();
+  }
   return DB.set('board:' + cur.id, { objects: serialize(cur.objects), view: cur.view }).catch(err => {
     clearTimeout(saveT); saveT = setTimeout(saveNow, 3000); // try again shortly; the board stays in memory meanwhile
     if (Date.now() - saveErrAt > 15000) { saveErrAt = Date.now(); toast('Не получилось сохранить, пробую ещё раз…'); }
     console.warn('save failed', err);
   });
 }
-const saveTree = () => DB.set('tree', tree);
+/* Sync bookkeeping: every tree change gets a time stamp (node.mtime) and every removal a tombstone
+   (tree.deleted[id]), so trees from different devices can be merged. Found by diffing on save. */
+const nodeSigs = new Map(); // id -> signature at the last save
+const nodeSig = n => JSON.stringify([n.type, n.name, n.parent, n.text || '']);
+function primeSigs() { nodeSigs.clear(); for (const n of Object.values(tree.nodes)) nodeSigs.set(n.id, nodeSig(n)); }
+function stampTree() {
+  const now = Date.now(); tree.deleted = tree.deleted || {};
+  for (const n of Object.values(tree.nodes)) {
+    const s = nodeSig(n);
+    if (nodeSigs.get(n.id) !== s) { n.mtime = now; nodeSigs.set(n.id, s); }
+  }
+  for (const id of [...nodeSigs.keys()]) if (!tree.nodes[id]) { tree.deleted[id] = now; nodeSigs.delete(id); }
+}
+function saveTree() { stampTree(); markSync(); return DB.set('tree', tree); }
 window.addEventListener('beforeunload', saveNow);
 document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
 
@@ -2234,6 +2262,131 @@ async function deliverPNG(blob, name) {
 }
 
 /* =========================================================
+   Sync between devices (through the bot server, keyed by the Telegram account)
+   Tree: nodes merged one by one (newer mtime wins, tombstones delete).
+   Boards: whole board, newer content (cAt) wins. Photos: uploaded once, never change.
+   ========================================================= */
+var syncing = false, syncAgain = false, syncDirty = false, syncT = null, lastPush = 0, syncedAssets = new Set();
+const PUSH_EVERY = 60000; // free KV storage allows ~1000 writes a day, so pushes are batched
+const syncEnabled = () => !!(tg && tg.initData && BOT_API);
+function markSync() { syncDirty = true; scheduleSync(); }
+function scheduleSync(delay) {
+  if (!syncEnabled() || syncing) { if (syncing) syncAgain = true; return; }
+  clearTimeout(syncT);
+  syncT = setTimeout(syncNow, delay != null ? delay : Math.max(5000, lastPush + PUSH_EVERY - Date.now()));
+}
+async function api(method, path, body, type) {
+  const headers = { Authorization: 'tma ' + tg.initData };
+  if (type) headers['Content-Type'] = type;
+  const r = await fetch(BOT_API + '/sync' + path, { method, headers, body });
+  if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+  return r;
+}
+// local-only fields (which folders are open, last open board) never travel
+const shareable = t => JSON.stringify({ deleted: t.deleted || {}, nodes: Object.fromEntries(Object.entries(t.nodes)
+  .map(([id, n]) => { const { open, lastBoard, ...rest } = n; return [id, rest]; })) });
+function mergeTrees(L, R) {
+  const out = { nodes: {}, deleted: {}, current: L.current, project: L.project };
+  for (const d of [R && R.deleted, L.deleted]) for (const [id, t] of Object.entries(d || {})) out.deleted[id] = Math.max(out.deleted[id] || 0, t);
+  const rn = (R && R.nodes) || {};
+  for (const id of new Set([...Object.keys(L.nodes), ...Object.keys(rn)])) {
+    const a = L.nodes[id], b = rn[id];
+    const n = { ...(!b ? a : !a ? b : (b.mtime || 0) > (a.mtime || 0) ? b : a) };
+    if (a) { n.open = a.open; if (a.lastBoard) n.lastBoard = a.lastBoard; else delete n.lastBoard; }
+    const cAt = Math.max((a && a.cAt) || 0, (b && b.cAt) || 0), upd = Math.max((a && a.updated) || 0, (b && b.updated) || 0);
+    if (cAt) n.cAt = cAt; if (upd) n.updated = upd;
+    const del = out.deleted[id];
+    if (del && del >= (n.mtime || 0) && del >= (n.cAt || 0)) continue; // deleted after its last change
+    out.nodes[id] = n;
+  }
+  return out;
+}
+async function pullBoard(id) {
+  const data = await (await api('GET', '/board/' + id)).json();
+  if (!data) return;
+  for (const o of data.objects || []) {
+    if (o.type !== 'image' || !o.assetId || await DB.get('asset:' + o.assetId)) continue;
+    try { await DB.set('asset:' + o.assetId, await (await api('GET', '/asset/' + o.assetId)).blob()); syncedAssets.add(o.assetId); }
+    catch (e) { console.warn('photo download failed', o.assetId, e); }
+  }
+  const local = await DB.get('board:' + id);
+  await DB.set('board:' + id, { objects: data.objects || [], view: (local && local.view) || data.view || { x: 0, y: 0, z: 1 } });
+  if (cur && cur.id === id && !drawing && !drag && !editingTextId) { // the open board changed elsewhere: show it
+    const objs = data.objects || []; await hydrate(objs);
+    cur.objects = objs; undoStack = []; redoStack = [];
+    if (!getSel()) selectedId = null;
+    updatePanel(); updateHistBtns(); baseValid = false; requestRender();
+  }
+}
+async function pushBoard(id) {
+  const data = await DB.get('board:' + id);
+  if (!data) return;
+  for (const o of data.objects || []) {
+    if (o.type !== 'image' || !o.assetId || syncedAssets.has(o.assetId)) continue;
+    const blob = await DB.get('asset:' + o.assetId); if (!blob) continue;
+    await api('PUT', '/asset/' + o.assetId, blob, blob.type || 'image/jpeg');
+    syncedAssets.add(o.assetId); DB.set('sync:assets', [...syncedAssets]);
+  }
+  await api('PUT', '/board/' + id, JSON.stringify({ objects: data.objects || [], view: data.view }), 'application/json');
+}
+async function syncNow() {
+  if (!syncEnabled()) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; clearTimeout(syncT); setSyncState('busy');
+  try {
+    if (cur) await saveNow();
+    const remote = await (await api('GET', '/tree')).json();
+    const local = JSON.parse(JSON.stringify(tree)); // as of now; edits made while syncing are merged in at the end
+    const merged = mergeTrees(local, remote);
+    let wrote = false;
+    for (const n of Object.values(merged.nodes)) {
+      if (n.type !== 'board') continue;
+      const ln = local.nodes[n.id], rn = remote && remote.nodes[n.id];
+      const lc = ln ? (ln.cAt || 1) : 0, rc = rn ? (rn.cAt || 1) : 0;
+      if (rc > lc) await pullBoard(n.id);
+      else if (ln && (lc > rc || !rn)) { await pushBoard(n.id); wrote = true; }
+    }
+    for (const [id, n] of Object.entries(local.nodes)) if (!merged.nodes[id] && n.type === 'board') DB.del('board:' + id);
+    if (remote) for (const [id, n] of Object.entries(remote.nodes)) {
+      if (n.type === 'board' && !merged.nodes[id]) { await api('DELETE', '/board/' + id).catch(() => {}); wrote = true; }
+    }
+    if (!remote || shareable(merged) !== shareable(remote)) { await api('PUT', '/tree', shareable(merged), 'application/json'); wrote = true; }
+    if (wrote) lastPush = Date.now();
+    applyMerged(merged);
+    syncDirty = false; setSyncState('ok');
+  } catch (e) {
+    console.warn('sync failed', e);
+    setSyncState(e.status === 401 ? 'auth' : e.status === 503 ? 'nostore' : 'offline');
+    syncDirty = true; clearTimeout(syncT); syncT = setTimeout(syncNow, 30000);
+  } finally {
+    syncing = false;
+    if (syncAgain) { syncAgain = false; scheduleSync(); }
+  }
+}
+function applyMerged(merged) {
+  tree = mergeTrees(tree, merged); // keeps anything changed on this device while the sync was running
+  primeSigs();
+  DB.set('tree', tree);
+  if (cur && !tree.nodes[cur.id]) { cur = null; closeBoard(); }
+  if (project && !tree.nodes[project]) { project = tree.project = null; if (!homeOpen()) showHome(); }
+  renderTree(); if (homeOpen()) renderHome();
+}
+function setSyncState(s) {
+  const at = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const text = { busy: 'Синхронизация…', ok: 'Синхронизировано · ' + at, offline: 'Нет связи — всё сохранено на устройстве',
+    auth: 'Перезапустите приложение для синхронизации', nostore: 'Хранилище синхронизации не настроено' }[s];
+  document.querySelectorAll('.sync').forEach(el => { el.dataset.state = s; el.querySelector('span').textContent = text; el.hidden = false; });
+}
+async function startSync() {
+  if (!syncEnabled()) return;
+  syncedAssets = new Set((await DB.get('sync:assets')) || []);
+  syncNow();
+  setInterval(() => { if (!document.hidden) syncNow(); }, 90000); // pick up changes from other devices
+  document.addEventListener('visibilitychange', () => { if (document.hidden ? syncDirty : true) syncNow(); });
+}
+document.querySelectorAll('.sync').forEach(el => el.addEventListener('click', () => syncNow()));
+
+/* =========================================================
    Init
    ========================================================= */
 $('#logo').innerHTML = $('#logo2').innerHTML = ic('vortex');
@@ -2257,6 +2410,8 @@ buildToolbar(); buildPanel(); syncControls();
   try { await DB.open(); } catch (e) { DB.mem = new Map(); toast('Хранилище недоступно — изменения не сохранятся'); }
   const saved = await DB.get('tree');
   tree = saved && saved.nodes ? saved : { nodes: {}, current: null };
+  tree.deleted = tree.deleted || {};
+  primeSigs();
   // every item must live in a project (top-level folder); older versions allowed boards/notes at the root
   const loose = kids(null).filter(n => n.type !== 'folder');
   if (loose.length) {
@@ -2268,6 +2423,7 @@ buildToolbar(); buildPanel(); syncControls();
   if (tree.project && tree.current && tree.nodes[tree.current] && !tree.nodes[tree.project].lastBoard) tree.nodes[tree.project].lastBoard = tree.current;
   await saveTree();
   resize(); showHome(); // the main menu is the start screen
+  startSync();
   setTimeout(() => gcAssets().catch(() => {}), 4000); // drop photos left over from deleted objects
 })();
 </script>
