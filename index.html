@@ -485,6 +485,12 @@ const ICONS = {
   note: '<path d="M5.5 4h13A1.5 1.5 0 0120 5.5V14l-6 6H5.5A1.5 1.5 0 014 18.5v-13A1.5 1.5 0 015.5 4z"/><path d="M14 20v-4.5a1.5 1.5 0 011.5-1.5H20"/><path d="M8 9h8M8 12.5h4.5"/>',
   notePlus: '<path d="M5.5 4h13A1.5 1.5 0 0120 5.5V12M12 20H5.5A1.5 1.5 0 014 18.5v-13A1.5 1.5 0 015.5 4"/><path d="M8 9h8M8 12.5h4.5"/><path d="M18 15v6M15 18h6"/>',
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+  shRect: '<rect x="3.5" y="6" width="17" height="12" rx="1.5"/>',
+  shSquare: '<rect x="5" y="5" width="14" height="14" rx="1.5"/>',
+  shEllipse: '<ellipse cx="12" cy="12" rx="9" ry="6.5"/>',
+  shCircle: '<circle cx="12" cy="12" r="8"/>',
+  shArrow: '<path d="M5 19L19 5M10 5h9v9"/>',
+  shLine: '<path d="M5 19L19 5"/>',
   text: '<path d="M5 6V4.5h14V6"/><path d="M12 4.5V20"/><path d="M9 20h6"/>',
   theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 000-17z" fill="currentColor"/>',
   bold: '<path d="M7 5h6a3.5 3.5 0 010 7H7zM7 12h7a3.5 3.5 0 010 7H7z"/>',
@@ -609,12 +615,13 @@ const TOOLS = [
   { id: 'calligraphy', name: 'Каллиграфия', key: 'K', icon: 'calligraphy', size: 14 },
   { id: 'spray', name: 'Аэрограф', key: 'A', icon: 'spray', size: 44 },
   { id: 'eraser', name: 'Ластик', key: 'E', icon: 'eraser', size: 30 },
-  { id: 'text', name: 'Текст', key: 'T', icon: 'text', size: 36 }
+  { id: 'text', name: 'Текст', key: 'T', icon: 'text', size: 36 },
+  { id: 'shape', name: 'Фигуры', key: 'R', icon: 'shRect', size: 4 }
 ];
 const DRAW_TOOLS = new Set(['pen', 'marker', 'pencil', 'highlighter', 'calligraphy', 'spray', 'eraser']);
 const COLORS = ['#1e1e1e', '#ffffff', '#e03131', '#f08c00', '#fcc419', '#2f9e44', '#1c7ed6', '#7048e8', '#e64980', '#868e96'];
 
-const st = { tool: 'pen', color: '#1e1e1e', opacity: 100, sizes: {} };
+const st = { tool: 'pen', color: '#1e1e1e', opacity: 100, sizes: {}, shape: 'rect' };
 TOOLS.forEach(t => { if (t.size) st.sizes[t.id] = t.size; });
 try { Object.assign(st, JSON.parse(localStorage.getItem('inkboard.tools') || '{}')); } catch (e) {}
 TOOLS.forEach(t => { if (t.size && st.sizes[t.id] == null) st.sizes[t.id] = t.size; }); // tools added after settings were saved
@@ -699,8 +706,68 @@ function drawGrid() {
   ctx.fill();
 }
 
-function drawObj(c, o) { if (o.type === 'image') drawImageObj(c, o); else if (o.type === 'text') drawTextObj(c, o); else drawStroke(c, o); }
-const isBoxed = o => !!o && (o.type === 'image' || o.type === 'text'); // objects with a frame: selectable, notes
+function drawObj(c, o) {
+  if (o.type === 'image') drawImageObj(c, o);
+  else if (o.type === 'text') drawTextObj(c, o);
+  else if (o.type === 'shape') drawShapeObj(c, o);
+  else if (o.type === 'arrow') drawArrowObj(c, o);
+  else drawStroke(c, o);
+}
+const isBoxed = o => !!o && (o.type === 'image' || o.type === 'text' || o.type === 'shape'); // a frame: move, resize, rotate
+const isObject = o => isBoxed(o) || (!!o && o.type === 'arrow'); // selectable, can carry a note
+
+/* ---------- shapes & arrows ---------- */
+const SHAPES = [
+  { id: 'rect', name: 'Прямоугольник', icon: 'shRect', kind: 'rect' },
+  { id: 'square', name: 'Квадрат', icon: 'shSquare', kind: 'rect', lock: true },
+  { id: 'ellipse', name: 'Эллипс', icon: 'shEllipse', kind: 'ellipse' },
+  { id: 'circle', name: 'Круг', icon: 'shCircle', kind: 'ellipse', lock: true },
+  { id: 'arrow', name: 'Стрелка', icon: 'shArrow', arrow: 'end' },
+  { id: 'line', name: 'Линия', icon: 'shLine', arrow: 'none' }
+];
+const shapeDef = () => SHAPES.find(s => s.id === st.shape) || SHAPES[0];
+const dashFor = o => o.dash ? [Math.max(2, o.sw) * 3, Math.max(2, o.sw) * 2] : [];
+function drawShapeObj(c, o) {
+  c.save();
+  c.translate(o.x + o.w / 2, o.y + o.h / 2); c.rotate(o.rot || 0);
+  c.globalAlpha = (o.opacity == null ? 100 : o.opacity) / 100;
+  const x = -o.w / 2, y = -o.h / 2;
+  c.beginPath();
+  if (o.kind === 'ellipse') c.ellipse(0, 0, o.w / 2, o.h / 2, 0, 0, Math.PI * 2);
+  else { const r = Math.min(o.radius || 0, o.w / 2, o.h / 2); if (r > 0 && c.roundRect) c.roundRect(x, y, o.w, o.h, r); else c.rect(x, y, o.w, o.h); }
+  if (o.fill) { c.fillStyle = o.fill; c.fill(); }
+  if (o.sw > 0) { c.lineWidth = o.sw; c.strokeStyle = o.color; c.lineJoin = 'round'; c.setLineDash(dashFor(o)); c.stroke(); }
+  c.restore();
+}
+const headLen = o => Math.max(10, o.sw * 3.2);
+function drawArrowObj(c, o) {
+  const dx = o.x2 - o.x1, dy = o.y2 - o.y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+  const hl = Math.min(headLen(o), len * 0.45), hw = hl * 0.55;
+  const atEnd = o.head === 'end' || o.head === 'both', atStart = o.head === 'both';
+  c.save();
+  c.globalAlpha = (o.opacity == null ? 100 : o.opacity) / 100;
+  c.strokeStyle = c.fillStyle = o.color; c.lineWidth = Math.max(0.5, o.sw); c.lineCap = 'round'; c.setLineDash(dashFor(o));
+  // the shaft stops at the heads so a thick line does not poke through their tips
+  c.beginPath();
+  c.moveTo(o.x1 + (atStart ? ux * hl * 0.8 : 0), o.y1 + (atStart ? uy * hl * 0.8 : 0));
+  c.lineTo(o.x2 - (atEnd ? ux * hl * 0.8 : 0), o.y2 - (atEnd ? uy * hl * 0.8 : 0));
+  c.stroke();
+  c.setLineDash([]); c.lineJoin = 'round';
+  const head = (tx, ty, dirx, diry) => {
+    c.beginPath(); c.moveTo(tx, ty);
+    c.lineTo(tx - dirx * hl - diry * hw, ty - diry * hl + dirx * hw);
+    c.lineTo(tx - dirx * hl + diry * hw, ty - diry * hl - dirx * hw);
+    c.closePath(); c.fill();
+  };
+  if (atEnd) head(o.x2, o.y2, ux, uy);
+  if (atStart) head(o.x1, o.y1, -ux, -uy);
+  c.restore();
+}
+function distToSegment(p, o) {
+  const dx = o.x2 - o.x1, dy = o.y2 - o.y1, l2 = dx * dx + dy * dy;
+  const t = l2 ? clamp(((p.x - o.x1) * dx + (p.y - o.y1) * dy) / l2, 0, 1) : 0;
+  return Math.hypot(p.x - (o.x1 + t * dx), p.y - (o.y1 + t * dy));
+}
 
 /* ---------- text ---------- */
 const FONTS = {
@@ -877,6 +944,10 @@ function drawImageObj(c, o) {
 /* ---------- geometry ---------- */
 function axes(o) { const a = o.rot || 0; return { ux: [Math.cos(a), Math.sin(a)], uy: [-Math.sin(a), Math.cos(a)], cx: o.x + o.w / 2, cy: o.y + o.h / 2 }; }
 function corners(o) {
+  if (o.type === 'arrow') { // its bounding box (used for the note badge and bounds)
+    const x0 = Math.min(o.x1, o.x2), x1 = Math.max(o.x1, o.x2), y0 = Math.min(o.y1, o.y2), y1 = Math.max(o.y1, o.y2);
+    return [{ sx: -1, sy: -1, x: x0, y: y0 }, { sx: 1, sy: -1, x: x1, y: y0 }, { sx: 1, sy: 1, x: x1, y: y1 }, { sx: -1, sy: 1, x: x0, y: y1 }];
+  }
   const { ux, uy, cx, cy } = axes(o);
   return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => ({
     sx, sy, x: cx + sx * o.w / 2 * ux[0] + sy * o.h / 2 * uy[0], y: cy + sx * o.w / 2 * ux[1] + sy * o.h / 2 * uy[1]
@@ -892,21 +963,29 @@ function toLocal(o, p) {
 }
 function hitObject(p) {
   for (let i = cur.objects.length - 1; i >= 0; i--) {
-    const o = cur.objects[i]; if (!isBoxed(o)) continue;
+    const o = cur.objects[i];
+    if (o.type === 'arrow') { if (distToSegment(p, o) <= o.sw / 2 + (touchUI() ? 14 : 7) / cur.view.z) return o; continue; }
+    if (!isBoxed(o)) continue;
     const l = toLocal(o, p); if (Math.abs(l.x) <= o.w / 2 && Math.abs(l.y) <= o.h / 2) return o;
   }
   return null;
 }
 const toScreen = p => ({ x: p.x * cur.view.z + cur.view.x, y: p.y * cur.view.z + cur.view.y });
 function hitHandle(o, sx, sy) {
-  const rh = toScreen(rotHandle(o)), t = touchUI() ? 22 : 9; // fingers need bigger targets
+  const t = touchUI() ? 22 : 9; // fingers need bigger targets
+  if (o.type === 'arrow') {
+    for (const end of [2, 1]) { const s = toScreen({ x: o['x' + end], y: o['y' + end] }); if (Math.hypot(s.x - sx, s.y - sy) < t + 2) return { type: 'end', end }; }
+    return null;
+  }
+  const rh = toScreen(rotHandle(o));
   if (Math.hypot(rh.x - sx, rh.y - sy) < t + 1) return { type: 'rot' };
   for (const c of corners(o)) { const s = toScreen(c); if (Math.abs(s.x - sx) < t && Math.abs(s.y - sy) < t) return { type: 'scale', sx: c.sx, sy: c.sy }; }
   return null;
 }
 function objBounds(o) {
-  if (isBoxed(o)) {
-    const cs = corners(o), pad = o.type === 'text' ? 2 : (o.f.border || 0) / 2 + (o.f.shadow || 0) * 1.6;
+  if (isObject(o)) {
+    const cs = corners(o), pad = o.type === 'text' ? 2 : o.type === 'shape' ? o.sw / 2 + 1 : o.type === 'arrow' ? headLen(o) + o.sw
+      : (o.f.border || 0) / 2 + (o.f.shadow || 0) * 1.6;
     return [Math.min(...cs.map(c => c.x)) - pad, Math.min(...cs.map(c => c.y)) - pad, Math.max(...cs.map(c => c.x)) + pad, Math.max(...cs.map(c => c.y)) + pad];
   }
   if (o.tool === 'eraser') return null;
@@ -926,12 +1005,19 @@ function contentBounds(objs) {
 const getSel = () => cur && selectedId ? cur.objects.find(o => o.id === selectedId) || null : null;
 function drawSelection() {
   const o = getSel(); if (!o) return;
-  const z = cur.view.z, cs = corners(o), rh = rotHandle(o);
+  const z = cur.view.z, big = touchUI();
+  if (o.type === 'arrow') { // a thin guide along the arrow and a round grip on each end
+    ctx.save(); ctx.strokeStyle = '#5b8cff'; ctx.fillStyle = '#fff'; ctx.lineWidth = 1.5 / z; ctx.setLineDash([4 / z, 4 / z]);
+    ctx.beginPath(); ctx.moveTo(o.x1, o.y1); ctx.lineTo(o.x2, o.y2); ctx.stroke(); ctx.setLineDash([]);
+    for (const [x, y] of [[o.x1, o.y1], [o.x2, o.y2]]) { ctx.beginPath(); ctx.arc(x, y, (big ? 10 : 6.5) / z, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    ctx.restore(); return;
+  }
+  const cs = corners(o), rh = rotHandle(o);
   ctx.save();
   ctx.strokeStyle = '#5b8cff'; ctx.lineWidth = 1.5 / z;
   ctx.beginPath(); cs.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); ctx.stroke();
   ctx.beginPath(); ctx.moveTo((cs[0].x + cs[1].x) / 2, (cs[0].y + cs[1].y) / 2); ctx.lineTo(rh.x, rh.y); ctx.stroke();
-  ctx.fillStyle = '#fff'; const big = touchUI(), hs = (big ? 14 : 9) / z;
+  ctx.fillStyle = '#fff'; const hs = (big ? 14 : 9) / z;
   for (const p of cs) { ctx.beginPath(); ctx.rect(p.x - hs / 2, p.y - hs / 2, hs, hs); ctx.fill(); ctx.stroke(); }
   ctx.beginPath(); ctx.arc(rh.x, rh.y, (big ? 8 : 5.5) / z, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.restore();
@@ -961,7 +1047,7 @@ function drawBrushCursor() {
    History & saving
    ========================================================= */
 // strokes never change once drawn; photos and texts are edited in place, so history keeps copies of them
-const copyObj = o => o.type === 'image' ? { ...o, f: { ...o.f } } : o.type === 'text' ? { ...o } : o;
+const copyObj = o => o.type === 'image' ? { ...o, f: { ...o.f } } : o.type === 'stroke' ? o : { ...o };
 const snapOf = objs => objs.map(copyObj);
 const snap = () => snapOf(cur.objects);
 function pushHistory(s) {
@@ -1140,6 +1226,7 @@ cv.addEventListener('pointerdown', e => {
     const sel = getSel(), h = sel && hitHandle(sel, p.sx, p.sy);
     if (h) {
       const before = snap();
+      if (h.type === 'end') { drag = { mode: 'end', o: sel, before, end: h.end }; return; }
       if (h.type === 'rot') {
         const { cx, cy } = axes(sel);
         drag = { mode: 'rot', o: sel, before, cx, cy, a0: Math.atan2(p.y - cy, p.x - cx), r0: sel.rot || 0 };
@@ -1156,7 +1243,7 @@ cv.addEventListener('pointerdown', e => {
       drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cur.view.x, vy: cur.view.y }; updateCursor(); return;
     }
     if (hit) {
-      drag = { mode: 'move', o: hit, before: snap(), dx: p.x - hit.x, dy: p.y - hit.y, moved: false, sx0: p.sx, sy0: p.sy };
+      drag = { mode: 'move', o: hit, before: snap(), o0: { ...hit }, px: p.x, py: p.y, moved: false, sx0: p.sx, sy0: p.sy };
       startHold(hit, e); // press and hold (phones) opens the object menu
     }
     return;
@@ -1169,6 +1256,17 @@ cv.addEventListener('pointerdown', e => {
       font: st.font || 'sans', bold: false, italic: false, align: 'left', bg: null, rot: 0, opacity: 100 };
     measureText(o); o.y -= o.h / 2; // the click marks the middle of the first line
     cur.objects.push(o); startTextEdit(o, true);
+    return;
+  }
+  if (st.tool === 'shape') {
+    const d = shapeDef(), base = { id: uid(), color: st.color, sw: st.sizes.shape / cur.view.z, opacity: st.opacity, dash: false };
+    const o = d.arrow
+      ? { type: 'arrow', ...base, x1: p.x, y1: p.y, x2: p.x, y2: p.y, head: d.arrow }
+      : { type: 'shape', ...base, kind: d.kind, lock: !!d.lock, x: p.x, y: p.y, w: 0, h: 0, rot: 0, fill: null, radius: d.kind === 'rect' ? 8 / cur.view.z : 0 };
+    const before = snap();
+    cur.objects.push(o); selectedId = null;
+    drag = { mode: 'create', o, before, anchor: { x: p.x, y: p.y } };
+    baseValid = false; requestRender();
     return;
   }
   if (DRAW_TOOLS.has(st.tool)) {
@@ -1208,7 +1306,26 @@ cv.addEventListener('pointermove', e => {
     } else if (drag.mode === 'move') {
       if (!drag.moved && Math.hypot(p.sx - drag.sx0, p.sy - drag.sy0) < HOLD_SLOP) return; // still a press, maybe a hold
       clearTimeout(holdTimer);
-      o.x = p.x - drag.dx; o.y = p.y - drag.dy; drag.moved = true;
+      const dx = p.x - drag.px, dy = p.y - drag.py, o0 = drag.o0;
+      if (o.type === 'arrow') { o.x1 = o0.x1 + dx; o.y1 = o0.y1 + dy; o.x2 = o0.x2 + dx; o.y2 = o0.y2 + dy; }
+      else { o.x = o0.x + dx; o.y = o0.y + dy; }
+      drag.moved = true;
+    } else if (drag.mode === 'end') { // stretching an arrow by one end; Shift snaps to 15°
+      const k = drag.end, ox = o[k === 1 ? 'x2' : 'x1'], oy = o[k === 1 ? 'y2' : 'y1'];
+      let x = p.x, y = p.y;
+      if (e.shiftKey) { const a = Math.round(Math.atan2(y - oy, x - ox) / (Math.PI / 12)) * (Math.PI / 12), l = Math.hypot(x - ox, y - oy); x = ox + Math.cos(a) * l; y = oy + Math.sin(a) * l; }
+      o['x' + k] = x; o['y' + k] = y; drag.moved = true;
+    } else if (drag.mode === 'create') { // drawing a new shape or arrow
+      const a = drag.anchor; let x = p.x, y = p.y;
+      if (o.type === 'arrow') {
+        if (e.shiftKey) { const ang = Math.round(Math.atan2(y - a.y, x - a.x) / (Math.PI / 12)) * (Math.PI / 12), l = Math.hypot(x - a.x, y - a.y); x = a.x + Math.cos(ang) * l; y = a.y + Math.sin(ang) * l; }
+        o.x2 = x; o.y2 = y;
+      } else {
+        let w = x - a.x, h = y - a.y;
+        if (o.lock || e.shiftKey) { const s = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * s; h = Math.sign(h || 1) * s; }
+        o.x = Math.min(a.x, a.x + w); o.y = Math.min(a.y, a.y + h); o.w = Math.abs(w); o.h = Math.abs(h);
+      }
+      drag.moved = true;
     } else if (drag.mode === 'rot') {
       let r = drag.r0 + Math.atan2(p.y - drag.cy, p.x - drag.cx) - drag.a0;
       if (e.shiftKey) r = Math.round(r / (Math.PI / 12)) * (Math.PI / 12);
@@ -1218,7 +1335,9 @@ cv.addEventListener('pointermove', e => {
       const dx = p.x - ax, dy = p.y - ay;
       const lx = (dx * ux[0] + dy * ux[1]) * sx, ly = (dx * uy[0] + dy * uy[1]) * sy;
       let nw, nh;
-      if (e.shiftKey && o.type !== 'text') { nw = Math.max(10, lx); nh = Math.max(10, ly); }
+      // shapes stretch freely (squares and circles keep their proportions); photos keep theirs unless Shift is held
+      const free = o.type === 'shape' ? !(o.lock || e.shiftKey) : e.shiftKey && o.type !== 'text';
+      if (free) { nw = Math.max(10, lx); nh = Math.max(10, ly); }
       else {
         const k = Math.max(10 / Math.min(w0, h0), (lx * w0 + ly * h0) / (w0 * w0 + h0 * h0));
         if (o.type === 'text') { o.size = clamp(drag.size0 * k, 4, 2000); measureText(o); nw = o.w; nh = o.h; } // text scales by font size
@@ -1254,6 +1373,15 @@ function endPointer(e) {
   if (drawing) {
     pushHistory(); cur.objects.push(drawing); drawing = null; changed();
   }
+  if (drag && drag.mode === 'create') { // finish a new shape: a plain tap gets a default size
+    const o = drag.o, z = cur.view.z, a = drag.anchor, tiny = o.type === 'arrow' ? Math.hypot(o.x2 - o.x1, o.y2 - o.y1) * z < 6 : Math.max(o.w, o.h) * z < 6;
+    if (tiny) {
+      if (o.type === 'arrow') { o.x1 = a.x - 80 / z; o.x2 = a.x + 80 / z; o.y1 = o.y2 = a.y; }
+      else { o.w = 140 / z; o.h = (o.lock ? 140 : 96) / z; o.x = a.x - o.w / 2; o.y = a.y - o.h / 2; }
+    }
+    pushHistory(drag.before); drag = null;
+    setTool('select'); select(o.id); changed();
+  }
   if (drag) {
     const tapped = drag.mode === 'move' && !drag.moved;
     if (drag.moved && drag.before) { pushHistory(drag.before); changed(); }
@@ -1276,9 +1404,10 @@ function updateCursor(p) {
   else if (spaceDown || st.tool === 'hand') c = 'grab';
   else if (DRAW_TOOLS.has(st.tool)) { const d = brushDiameter(); c = ringCursor(d > CURSOR_MAX ? 10 : Math.max(8, d)); }
   else if (st.tool === 'text') c = 'text';
+  else if (st.tool === 'shape') c = 'crosshair';
   else if (st.tool === 'select' && p && cur) {
     const sel = getSel(), h = sel && hitHandle(sel, p.sx, p.sy);
-    if (h) c = h.type === 'rot' ? 'grab' : (h.sx * h.sy > 0 ? 'nwse-resize' : 'nesw-resize');
+    if (h) c = h.type === 'end' ? 'pointer' : h.type === 'rot' ? 'grab' : (h.sx * h.sy > 0 ? 'nwse-resize' : 'nesw-resize');
     else if (hitObject(p)) c = 'move';
   }
   if (cv.style.cursor !== c) cv.style.cursor = c;
@@ -1496,6 +1625,26 @@ function buildPanel() {
       <button class="tbtn" data-act="savePng" data-tip="Сохранить PNG">${ic('download')}</button>
     </div>
     </div>
+    <div class="pshp">
+    <div class="ptitle"><span class="shpTitle">Фигура</span>${closeBtn}</div>
+    <h4>Линия</h4>
+    <div class="prow"><span>Цвет</span><input type="color" data-t="color"><span></span></div>
+    <div class="prow"><span>Толщина</span><input type="range" data-t="sw" min="0" max="40" step="1"><span class="val" data-sv="sw"></span></div>
+    <div class="presets"><button class="chip" data-tt="dash">Пунктир</button></div>
+    <div class="arrowOnly"><h4>Наконечники</h4>
+      <div class="presets"><button class="chip" data-head="end">→ С одной стороны</button><button class="chip" data-head="both">↔ С двух</button><button class="chip" data-head="none">— Без</button></div>
+    </div>
+    <div class="boxOnly"><h4>Заливка</h4>
+      <div class="prow"><span>Цвет</span><input type="color" data-t="fill"><button class="chip" data-tt="fill">Нет</button></div>
+      <div class="prow rectOnly"><span>Скругление</span><input type="range" data-t="radius" min="0" max="200" step="1"><span class="val" data-sv="radius"></span></div>
+    </div>
+    <div class="prow"><span>Непрозрачность</span><input type="range" data-t="opacity" min="5" max="100" step="1"><span class="val" data-sv="opacity"></span></div>
+    <h4>Действия</h4>
+    <div class="acts">${commonActs}
+      <button class="tbtn" data-act="reset" data-tip="Сбросить поворот">${ic('reset')}</button>
+      <button class="tbtn" data-act="savePng" data-tip="Сохранить PNG">${ic('download')}</button>
+    </div>
+    </div>
     <div class="pimg">
     <div class="ptitle"><span>Фото</span>${closeBtn}</div>
     <h4>Быстрые фильтры</h4>
@@ -1528,11 +1677,30 @@ function updatePanel() {
   p.classList.toggle('show', !!o && panelOpen);
   syncBack();
   if (!o) return;
-  const isText = o.type === 'text';
+  const isText = o.type === 'text', isShape = o.type === 'shape' || o.type === 'arrow';
   p.querySelector('.ptxt').style.display = isText ? '' : 'none';
-  p.querySelector('.pimg').style.display = isText ? 'none' : '';
+  p.querySelector('.pshp').style.display = isShape ? '' : 'none';
+  p.querySelector('.pimg').style.display = isText || isShape ? 'none' : '';
+  if (isShape) {
+    const s = p.querySelector('.pshp'), arrow = o.type === 'arrow';
+    s.querySelector('.shpTitle').textContent = arrow ? (o.head === 'none' ? 'Линия' : 'Стрелка') : o.kind === 'ellipse' ? (o.lock ? 'Круг' : 'Эллипс') : (o.lock ? 'Квадрат' : 'Прямоугольник');
+    s.querySelector('.arrowOnly').style.display = arrow ? '' : 'none';
+    s.querySelector('.boxOnly').style.display = arrow ? 'none' : '';
+    s.querySelector('.rectOnly').style.display = o.kind === 'rect' ? '' : 'none';
+    s.querySelectorAll('[data-t]').forEach(inp => {
+      const k = inp.dataset.t;
+      inp.value = k === 'opacity' ? (o.opacity == null ? 100 : o.opacity) : k === 'fill' ? (o.fill || '#a5d8ff') : k === 'sw' || k === 'radius' ? Math.round(o[k] || 0) : o[k];
+    });
+    s.querySelector('[data-sv="sw"]').textContent = Math.round(o.sw) + 'px';
+    s.querySelector('[data-sv="radius"]').textContent = Math.round(o.radius || 0) + 'px';
+    s.querySelector('[data-sv="opacity"]').textContent = (o.opacity == null ? 100 : o.opacity) + '%';
+    s.querySelector('[data-tt="dash"]').classList.toggle('on', !!o.dash);
+    const fb = s.querySelector('[data-tt="fill"]'); fb.textContent = o.fill ? 'Убрать' : 'Нет'; fb.classList.toggle('on', !!o.fill);
+    s.querySelectorAll('[data-head]').forEach(b => b.classList.toggle('on', b.dataset.head === o.head));
+    return;
+  }
   if (isText) {
-    p.querySelectorAll('[data-t]').forEach(inp => {
+    p.querySelector('.ptxt').querySelectorAll('[data-t]').forEach(inp => {
       const k = inp.dataset.t;
       inp.value = k === 'size' ? Math.round(o.size) : k === 'opacity' ? (o.opacity == null ? 100 : o.opacity) : k === 'bg' ? (o.bg || '#fff3a3') : o[k];
     });
@@ -1557,9 +1725,9 @@ $('#props').addEventListener('input', e => {
   const t = e.target.dataset.t, k = e.target.dataset.k;
   if (!t && !k) return;
   if (!panelSnap) panelSnap = snap();
-  if (t) { // text style
+  if (t) { // text / shape style
     o[t] = e.target.type === 'color' ? e.target.value : +e.target.value;
-    measureText(o);
+    if (o.type === 'text') measureText(o);
   } else {
     o.f[k] = e.target.type === 'color' ? e.target.value : +e.target.value;
     if (k === 'tint' && !o.f.tintAmt) o.f.tintAmt = 35;
@@ -1570,6 +1738,13 @@ $('#props').addEventListener('change', () => { if (panelSnap) { pushHistory(pane
 $('#props').addEventListener('click', e => {
   const o = getSel(); if (!o) return;
   const fontB = e.target.closest('[data-font]'), alignB = e.target.closest('[data-align]'), tt = e.target.closest('[data-tt]');
+  const headB = e.target.closest('[data-head]');
+  if ((o.type === 'shape' || o.type === 'arrow') && (tt || headB)) {
+    pushHistory();
+    if (headB) o.head = headB.dataset.head;
+    if (tt) { const k = tt.dataset.tt; o[k] = k === 'fill' ? (o.fill ? null : '#a5d8ff') : !o[k]; }
+    updatePanel(); changed(); return;
+  }
   if (o.type === 'text' && (fontB || alignB || tt)) {
     pushHistory();
     if (fontB) o.font = st.font = fontB.dataset.font;
@@ -1600,9 +1775,15 @@ function imageAction(act) {
   switch (act) {
     case 'flipX': t.flipX = !t.flipX; break;
     case 'flipY': t.flipY = !t.flipY; break;
-    case 'rot90': t.rot = ((t.rot || 0) + Math.PI / 2) % (Math.PI * 2); break;
+    case 'rot90':
+      if (t.type === 'arrow') { // turn both ends a quarter around the middle
+        const mx = (t.x1 + t.x2) / 2, my = (t.y1 + t.y2) / 2;
+        [[1], [2]].forEach(([k]) => { const dx = t['x' + k] - mx, dy = t['y' + k] - my; t['x' + k] = mx - dy; t['y' + k] = my + dx; });
+      } else t.rot = ((t.rot || 0) + Math.PI / 2) % (Math.PI * 2);
+      break;
     case 'dup': {
-      const c = { ...copyObj(t), id: uid(), x: t.x + 30 / cur.view.z, y: t.y + 30 / cur.view.z };
+      const d = 30 / cur.view.z, c = { ...copyObj(t), id: uid() };
+      if (t.type === 'arrow') { c.x1 += d; c.y1 += d; c.x2 += d; c.y2 += d; } else { c.x = t.x + d; c.y = t.y + d; }
       objs.push(c); selectedId = c.id; break;
     }
     case 'del': objs.splice(j, 1); selectedId = null; break;
@@ -1631,7 +1812,8 @@ function buildToolbar() {
      <button class="tbtn" id="tb-clear" data-tip="Очистить доску">${ic('clear')}</button>`;
   tb.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.tool) setTool(b.dataset.tool);
+    if (b.dataset.tool === 'shape') showShapeMenu(b);
+    else if (b.dataset.tool) setTool(b.dataset.tool);
     else if (b.id === 'tb-undo') undo();
     else if (b.id === 'tb-redo') redo();
     else if (b.id === 'tb-import') $('#fileInput').click();
@@ -1660,13 +1842,20 @@ function setTool(t) {
 function setColor(c) {
   st.color = c;
   const o = getSel();
-  if (o && o.type === 'text') { // recolour the selected text instead of switching tools
+  if (o && (o.type === 'text' || o.type === 'shape' || o.type === 'arrow')) { // recolour the selection instead of switching tools
     pushHistory(); o.color = c; updatePanel(); changed(); if (editingTextId === o.id) placeTextEd();
-  } else if (st.tool !== 'text' && (st.tool === 'eraser' || !DRAW_TOOLS.has(st.tool))) st.tool = 'pen';
+  } else if (st.tool !== 'text' && st.tool !== 'shape' && (st.tool === 'eraser' || !DRAW_TOOLS.has(st.tool))) st.tool = 'pen';
   syncControls(); saveTools();
+}
+function showShapeMenu(anchor) {
+  const r = anchor.getBoundingClientRect();
+  showMenu(r.left, r.bottom + 6, SHAPES.map(s => ({ label: s.name, icon: s.icon, checked: st.tool === 'shape' && s.id === shapeDef().id,
+    act: () => { st.shape = s.id; saveTools(); setTool('shape'); } })));
 }
 function syncControls() {
   document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === st.tool));
+  const shb = document.querySelector('[data-tool="shape"]'); // the button shows the shape that will be drawn
+  if (shb && shb.dataset.icon !== shapeDef().icon) { shb.dataset.icon = shapeDef().icon; shb.innerHTML = ic(shapeDef().icon); }
   document.querySelectorAll('.sw[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c.toLowerCase() === st.color.toLowerCase()));
   const custom = document.querySelector('.sw.custom');
   const isCustom = !COLORS.some(c => c.toLowerCase() === st.color.toLowerCase());
@@ -2008,7 +2197,7 @@ function topRight(o) { return toScreen(corners(o).reduce((a, c) => (c.x - c.y > 
 function drawNoteBadges() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   for (const o of cur.objects) {
-    if (!isBoxed(o) || !noteOf(o) || o.id === editingTextId) continue;
+    if (!isObject(o) || !noteOf(o) || o.id === editingTextId) continue;
     const b = topRight(o);
     ctx.beginPath(); ctx.arc(b.x, b.y, 10, 0, Math.PI * 2);
     ctx.fillStyle = '#8b5cf6'; ctx.fill();
@@ -2025,7 +2214,7 @@ function updateNoteTip(p) {
   // never while the object is being moved, resized, rotated or edited
   if (!cur || !p || drag || drawing || editingNote || menu.classList.contains('show')) return hideNoteTip();
   let o = hitObject(p);
-  if (!noteOf(o)) o = [...cur.objects].reverse().find(x => isBoxed(x) && noteOf(x) && Math.hypot(topRight(x).x - p.sx, topRight(x).y - p.sy) < 12);
+  if (!noteOf(o)) o = [...cur.objects].reverse().find(x => isObject(x) && noteOf(x) && Math.hypot(topRight(x).x - p.sx, topRight(x).y - p.sy) < 12);
   if (editingTextId) return hideNoteTip();
   const note = noteOf(o);
   if (!note || (panelOpen && selectedId === o.id)) return hideNoteTip();
