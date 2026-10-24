@@ -1200,9 +1200,16 @@ textEd().addEventListener('input', e => {
   o.text = e.target.value; measureText(o); placeTextEd(); requestRender();
 });
 textEd().addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== textEd()) endTextEdit(); }, 0));
+// Enter finishes the text; Ctrl+Enter (or Shift+Enter) starts a new line
 textEd().addEventListener('keydown', e => {
   e.stopPropagation();
-  if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); endTextEdit(); }
+  if (e.key === 'Escape') { e.preventDefault(); endTextEdit(); return; }
+  if (e.key !== 'Enter' || e.isComposing) return;
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    const ed = e.target; ed.setRangeText('\n', ed.selectionStart, ed.selectionEnd, 'end');
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  } else endTextEdit();
 });
 cv.addEventListener('pointerdown', e => {
   if (!cur) return;
