@@ -1125,7 +1125,9 @@ cv.addEventListener('pointerdown', e => {
   if (e.button === 2) return;
   hideMenu(); closeDrawer();
   try { cv.setPointerCapture(e.pointerId); } catch (err) {} // can throw if the pointer is already gone
-  if (e.pointerType !== 'touch') pointers.clear(); // a mouse/pen has one pointer; never let a stale entry block ending a stroke
+  // A mouse/pen has one pointer, and the first finger of a new touch (isPrimary) means no other finger is down:
+  // either way drop leftovers whose pointerup never arrived (iOS can swallow it), or one finger would act as a pinch.
+  if (e.pointerType !== 'touch' || e.isPrimary) pointers.clear();
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (e.pointerType === 'touch' && pointers.size === 2) { startPinch(); return; }
   if (pointers.size > 1) return;
@@ -1150,6 +1152,9 @@ cv.addEventListener('pointerdown', e => {
     }
     const hit = hitObject(p);
     select(hit ? hit.id : null);
+    if (!hit) { // dragging the empty board moves it
+      drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cur.view.x, vy: cur.view.y }; updateCursor(); return;
+    }
     if (hit) {
       drag = { mode: 'move', o: hit, before: snap(), dx: p.x - hit.x, dy: p.y - hit.y, moved: false, sx0: p.sx, sy0: p.sy };
       startHold(hit, e); // press and hold (phones) opens the object menu
@@ -1260,6 +1265,9 @@ function endPointer(e) {
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
+// a finger lifted outside the board (capture lost) must still be forgotten
+for (const t of ['pointerup', 'pointercancel']) window.addEventListener(t, e => { if (e.target !== cv && pointers.has(e.pointerId)) endPointer(e); });
+cv.addEventListener('lostpointercapture', e => { if (pointers.has(e.pointerId)) endPointer(e); });
 cv.addEventListener('pointerleave', () => { cursorPos = null; hideNoteTip(); requestRender(); });
 
 function updateCursor(p) {
