@@ -102,6 +102,21 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 #noteEd textarea:focus{border-color:var(--note);box-shadow:0 0 0 3px rgba(139,92,246,.15)}
 #noteEd .ft{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--ink-dim)}
 #noteEd .ft .pbtn{background:var(--note)} #noteEd .ft .pbtn:hover{background:var(--note-ink)}
+#noteEd .ftb{display:flex;gap:8px;flex:none}
+#noteEd .ftb .wbtn{flex:none;padding:0 12px;height:36px}
+#noteEd.dropping .card{box-shadow:0 0 0 3px var(--note),0 20px 60px rgba(16,18,24,.25)}
+.nimgs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.nimgs:empty{display:none}
+.nimg{position:relative;width:76px;height:76px;border-radius:10px;overflow:hidden;background:var(--soft);cursor:zoom-in;flex:none}
+.nimg img{width:100%;height:100%;object-fit:cover;display:block}
+.nimg button{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;display:grid;place-items:center;padding:0}
+.nimg button svg{width:13px;height:13px}
+#noteTip .ti{display:flex;gap:6px;margin-top:8px;align-items:center}
+#noteTip .ti img{width:64px;height:64px;object-fit:cover;border-radius:8px;background:var(--soft)}
+#noteTip .ti span{font-size:12px;color:var(--ink-dim)}
+#lightbox{position:fixed;inset:0;z-index:70;background:rgba(10,10,12,.86);display:none;place-items:center;padding:16px;cursor:zoom-out}
+#lightbox.show{display:grid}
+#lightbox img{max-width:100%;max-height:92vh;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 
 /* hover card for objects with a note */
 #textEd{position:absolute;z-index:7;display:none;margin:0;border:1.5px dashed var(--accent);outline:none;resize:none;overflow:hidden;white-space:pre;overflow-wrap:normal;box-sizing:border-box;transform-origin:center;min-width:12px;-webkit-user-select:text;user-select:text}
@@ -429,9 +444,12 @@ html,body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
   <div class="card">
     <div class="hd"><span id="noteEdIcon"></span><input id="noteEdTitle" placeholder="Название заметки"></div>
     <textarea id="noteEdText" placeholder="Текст заметки…"></textarea>
-    <div class="ft"><span id="noteEdInfo"></span><button class="pbtn" id="noteEdDone">Готово</button></div>
+    <div class="nimgs" id="noteEdImgs"></div>
+    <div class="ft"><span id="noteEdInfo"></span><span class="ftb"><button class="wbtn" id="noteEdPhoto" title="Добавить фото (или вставьте Ctrl+V, перетащите сюда)"></button><button class="pbtn" id="noteEdDone">Готово</button></span></div>
   </div>
 </div>
+<input type="file" id="noteFile" accept="image/*" multiple hidden>
+<div id="lightbox"><img alt=""></div>
 <div id="toast"></div>
 <input type="file" id="fileInput" accept="image/*" multiple hidden>
 
@@ -589,6 +607,7 @@ async function gcAssets() {
   const keys = (await DB.keys()).filter(k => typeof k === 'string' && k.startsWith('asset:'));
   if (!keys.length) return;
   const used = new Set(), mark = objs => { for (const o of objs || []) if (o.assetId) used.add(o.assetId); };
+  for (const n of Object.values(tree.nodes)) if (n.images) n.images.forEach(id => used.add(id)); // photos inside notes
   for (const n of Object.values(tree.nodes)) {
     if (n.type !== 'board') continue;
     if (cur && cur.id === n.id) { mark(cur.objects); undoStack.forEach(mark); redoStack.forEach(mark); }
@@ -1084,7 +1103,7 @@ function saveNow() {
 /* Sync bookkeeping: every tree change gets a time stamp (node.mtime) and every removal a tombstone
    (tree.deleted[id]), so trees from different devices can be merged. Found by diffing on save. */
 const nodeSigs = new Map(); // id -> signature at the last save
-const nodeSig = n => JSON.stringify([n.type, n.name, n.parent, n.text || '']);
+const nodeSig = n => JSON.stringify([n.type, n.name, n.parent, n.text || '', n.images || []]);
 function primeSigs() { nodeSigs.clear(); for (const n of Object.values(tree.nodes)) nodeSigs.set(n.id, nodeSig(n)); }
 function stampTree() {
   const now = Date.now(); tree.deleted = tree.deleted || {};
@@ -1466,21 +1485,25 @@ cv.addEventListener('contextmenu', e => {
    Images: import, drop, paste
    ========================================================= */
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+// stores a picked/dropped photo as an asset, shrunk to at most `max` px (phone photos are 4000px+)
+async function importPhoto(file, max = 2048) {
+  const tmp = URL.createObjectURL(file);
+  let img;
+  try { img = await loadImg(tmp); } finally { URL.revokeObjectURL(tmp); }
+  let nw = img.naturalWidth || 400, nh = img.naturalHeight || 300, blob = file;
+  if (Math.max(nw, nh) > max || !/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+    const s = Math.min(1, max / Math.max(nw, nh));
+    const c = document.createElement('canvas'); c.width = Math.round(nw * s); c.height = Math.round(nh * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    blob = await new Promise(r => c.toBlob(r, file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.9));
+    nw = c.width; nh = c.height;
+  }
+  return { assetId: await putAsset(blob), nw, nh };
+}
 async function addImageFile(file, cx, cy) {
   try {
-    const tmp = URL.createObjectURL(file);
+    const { assetId, nw, nh } = await importPhoto(file), src = assetURLs.get(assetId);
     let img;
-    try { img = await loadImg(tmp); } finally { URL.revokeObjectURL(tmp); }
-    let nw = img.naturalWidth || 400, nh = img.naturalHeight || 300, blob = file;
-    const MAX = 2048; // phone photos are 4000px+; this keeps memory and storage sane
-    if (Math.max(nw, nh) > MAX || !/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
-      const s = Math.min(1, MAX / Math.max(nw, nh));
-      const c = document.createElement('canvas'); c.width = Math.round(nw * s); c.height = Math.round(nh * s);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      blob = await new Promise(r => c.toBlob(r, file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.9));
-      nw = c.width; nh = c.height;
-    }
-    const assetId = await putAsset(blob), src = assetURLs.get(assetId);
     img = await loadImg(src);
     const k = Math.min(1, (Math.min(520, W * 0.7) / cur.view.z) / Math.max(nw, nh));
     const w = nw * k, h = nh * k;
@@ -2139,6 +2162,7 @@ function openNoteEditor(id, fresh) {
   const path = pathOf(id); path.pop();
   $('#noteEdInfo').textContent = path.length ? path.join(' / ') : 'Корень проекта';
   $('#noteEd').classList.add('show'); syncBack();
+  renderNoteImgs();
   const f = fresh ? $('#noteEdTitle') : $('#noteEdText');
   f.focus(); if (fresh) f.select();
 }
@@ -2158,6 +2182,50 @@ $('#noteEd').addEventListener('input', () => {
 $('#noteEdIcon').innerHTML = ic('note');
 $('#noteEdDone').onclick = closeNoteEditor;
 $('#noteEd').addEventListener('pointerdown', e => { if (e.target.id === 'noteEd') closeNoteEditor(); });
+
+/* photos inside notes: stored as assets, listed by id in note.images */
+async function setAssetImg(imgEl, id) { const u = await assetURL(id); if (u) imgEl.src = u; }
+function renderNoteImgs() {
+  const n = tree.nodes[editingNote], box = $('#noteEdImgs'); box.innerHTML = '';
+  for (const id of (n && n.images) || []) {
+    const d = document.createElement('div'); d.className = 'nimg'; d.dataset.id = id;
+    d.innerHTML = `<img alt=""><button title="Убрать фото">${ic('plus').replace('class="i"', 'class="i" style="transform:rotate(45deg)"')}</button>`;
+    setAssetImg(d.querySelector('img'), id); box.appendChild(d);
+  }
+}
+async function addNotePhotos(files) {
+  const n = tree.nodes[editingNote]; if (!n) return;
+  files = [...files].filter(f => f.type.startsWith('image/'));
+  if (!files.length) return;
+  for (const f of files) {
+    try { const { assetId } = await importPhoto(f, 1600); n.images = [...(n.images || []), assetId]; }
+    catch (e) { toast('Не удалось добавить фото'); }
+  }
+  saveTree(); renderNoteImgs(); tipKey = null;
+}
+function openLightbox(id) { const lb = $('#lightbox'); setAssetImg(lb.querySelector('img'), id); lb.classList.add('show'); syncBack(); }
+function closeLightbox() { $('#lightbox').classList.remove('show'); syncBack(); }
+$('#lightbox').addEventListener('click', closeLightbox);
+$('#noteEdPhoto').innerHTML = ic('image') + ' Фото';
+$('#noteEdPhoto').onclick = () => $('#noteFile').click();
+$('#noteFile').addEventListener('change', e => { addNotePhotos(e.target.files); e.target.value = ''; });
+$('#noteEdImgs').addEventListener('click', e => {
+  const d = e.target.closest('.nimg'); if (!d) return;
+  const n = tree.nodes[editingNote];
+  if (e.target.closest('button')) { n.images = (n.images || []).filter(x => x !== d.dataset.id); saveTree(); renderNoteImgs(); tipKey = null; }
+  else openLightbox(d.dataset.id);
+});
+$('#noteEd').addEventListener('paste', e => {
+  const files = [...(e.clipboardData && e.clipboardData.files || [])];
+  if (files.length) { e.preventDefault(); addNotePhotos(files); }
+});
+$('#noteEd').addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); e.stopPropagation(); $('#noteEd').classList.add('dropping'); } });
+$('#noteEd').addEventListener('dragleave', e => { if (!$('#noteEd').contains(e.relatedTarget)) $('#noteEd').classList.remove('dropping'); });
+$('#noteEd').addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); e.stopPropagation(); $('#noteEd').classList.remove('dropping');
+  addNotePhotos(e.dataTransfer.files);
+});
 $('#noteEd').addEventListener('keydown', e => {
   if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); closeNoteEditor(); }
   else if (e.key === 'Enter' && e.target.id === 'noteEdTitle') { e.preventDefault(); $('#noteEdText').focus(); }
@@ -2225,14 +2293,23 @@ function updateNoteTip(p) {
   if (editingTextId) return hideNoteTip();
   const note = noteOf(o);
   if (!note || (panelOpen && selectedId === o.id)) return hideNoteTip();
-  const key = o.id + '|' + note.name + '|' + note.text;
+  const imgs = note.images || [];
+  const key = o.id + '|' + note.name + '|' + note.text + '|' + imgs.join();
   if (tipKey !== key) {
     tipKey = key;
     tipEl.innerHTML = `<div class="t">${ic('note')}<span></span></div><div class="b"></div>`;
     tipEl.querySelector('.t span').textContent = note.name;
     const body = tipEl.querySelector('.b');
-    body.textContent = note.text && note.text.trim() ? note.text : 'Пустая заметка';
-    body.classList.toggle('empty', !(note.text && note.text.trim()));
+    const hasText = !!(note.text && note.text.trim());
+    body.textContent = hasText ? note.text : imgs.length ? '' : 'Пустая заметка';
+    body.classList.toggle('empty', !hasText);
+    body.style.display = hasText || !imgs.length ? '' : 'none';
+    if (imgs.length) { // up to three thumbnails, then "+N"
+      const row = document.createElement('div'); row.className = 'ti';
+      imgs.slice(0, 3).forEach(id => { const im = document.createElement('img'); im.alt = ''; row.appendChild(im); setAssetImg(im, id); });
+      if (imgs.length > 3) { const more = document.createElement('span'); more.textContent = '+' + (imgs.length - 3); row.appendChild(more); }
+      tipEl.appendChild(row);
+    }
   }
   // the card grows up and to the right from the object's top-right corner (the note badge);
   // near the screen edges it slides inward but stays attached to that corner
@@ -2287,7 +2364,8 @@ if (tg) {
 }
 // Telegram's back button closes whatever is on top
 function goBack() {
-  if (editingNote) closeNoteEditor();
+  if ($('#lightbox').classList.contains('show')) closeLightbox();
+  else if (editingNote) closeNoteEditor();
   else if (menu.classList.contains('show')) hideMenu();
   else if ($('#pngView').classList.contains('show')) closePngView();
   else if (panelOpen) { panelOpen = false; updatePanel(); }
@@ -2550,6 +2628,17 @@ async function syncNow() {
       if (rc > lc) await pullBoard(n.id);
       else if (ln && (lc > rc || !rn)) { await pushBoard(n.id); wrote = true; }
     }
+    for (const n of Object.values(merged.nodes)) { // photos inside notes: upload ours, fetch the ones from other devices
+      for (const id of (n.type === 'note' && n.images) || []) {
+        const blob = await DB.get('asset:' + id);
+        if (blob && !syncedAssets.has(id)) { await api('PUT', '/asset/' + id, blob, blob.type || 'image/jpeg'); syncedAssets.add(id); wrote = true; }
+        else if (!blob) {
+          try { await DB.set('asset:' + id, await (await api('GET', '/asset/' + id)).blob()); syncedAssets.add(id); }
+          catch (e) { console.warn('note photo download failed', id, e); }
+        }
+      }
+    }
+    DB.set('sync:assets', [...syncedAssets]);
     for (const [id, n] of Object.entries(local.nodes)) if (!merged.nodes[id] && n.type === 'board') DB.del('board:' + id);
     if (remote) for (const [id, n] of Object.entries(remote.nodes)) {
       if (n.type === 'board' && !merged.nodes[id]) { await api('DELETE', '/board/' + id).catch(() => {}); wrote = true; }
